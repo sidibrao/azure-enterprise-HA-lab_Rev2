@@ -1,0 +1,116 @@
+# Disabled in the restricted hands-on sandbox because the assigned identity has
+# resource-group scope only. Rename this file back to policy.tf in an account
+# with subscription/management-group policy permissions.
+resource "azurerm_policy_definition" "deny_nic_public_ip" {
+  count        = var.enable_management_group ? 0 : 1
+  name         = "${var.prefix}-deny-nic-public-ip"
+  policy_type  = "Custom"
+  mode         = "All"
+  display_name = "Deny network interfaces with public IP addresses"
+  description  = "Blocks NIC configurations that reference a public IP resource."
+
+  policy_rule = jsonencode({
+    if = {
+      allOf = [
+        { field = "type", equals = "Microsoft.Network/networkInterfaces" },
+        {
+          count = {
+            field = "Microsoft.Network/networkInterfaces/ipconfigurations[*]"
+            where = {
+              field  = "Microsoft.Network/networkInterfaces/ipconfigurations[*].publicIpAddress.id"
+              exists = "true"
+            }
+          }
+          greater = 0
+        }
+      ]
+    }
+    then = { effect = "deny" }
+  })
+}
+
+resource "azurerm_policy_set_definition" "deny_public_ips" {
+  count        = var.enable_management_group ? 0 : 1
+  name         = "${var.prefix}-deny-public-ips"
+  policy_type  = "Custom"
+  display_name = "Deny public IPs initiative"
+  description  = "Enterprise guardrail for internal Corp workloads."
+
+  policy_definition_reference {
+    policy_definition_id = azurerm_policy_definition.deny_nic_public_ip[0].id
+    reference_id         = "denyNicPublicIp"
+  }
+}
+
+resource "azurerm_policy_definition" "deny_nic_public_ip_mg" {
+  count               = var.enable_management_group ? 1 : 0
+  name                = "${var.prefix}-deny-nic-public-ip"
+  policy_type         = "Custom"
+  mode                = "All"
+  display_name        = "Deny network interfaces with public IP addresses"
+  description         = "Blocks NIC configurations that reference a public IP resource."
+  management_group_id = azurerm_management_group.corp[0].id
+
+  policy_rule = jsonencode({
+    if = {
+      allOf = [
+        { field = "type", equals = "Microsoft.Network/networkInterfaces" },
+        {
+          count = {
+            field = "Microsoft.Network/networkInterfaces/ipconfigurations[*]"
+            where = {
+              field  = "Microsoft.Network/networkInterfaces/ipconfigurations[*].publicIpAddress.id"
+              exists = "true"
+            }
+          }
+          greater = 0
+        }
+      ]
+    }
+    then = { effect = "deny" }
+  })
+}
+
+resource "azurerm_management_group_policy_set_definition" "deny_public_ips" {
+  count               = var.enable_management_group ? 1 : 0
+  name                = "${var.prefix}-deny-public-ips"
+  policy_type         = "Custom"
+  display_name        = "Deny public IPs initiative"
+  description         = "Enterprise guardrail for internal Corp workloads."
+  management_group_id = azurerm_management_group.corp[0].id
+
+  policy_definition_reference {
+    policy_definition_id = azurerm_policy_definition.deny_nic_public_ip_mg[0].id
+    reference_id         = "denyNicPublicIp"
+  }
+}
+
+resource "azurerm_management_group" "corp" {
+  count        = var.enable_management_group ? 1 : 0
+  name         = var.corp_management_group_id
+  display_name = "Corp"
+}
+
+resource "azurerm_management_group_subscription_association" "corp" {
+  count               = var.enable_management_group ? 1 : 0
+  management_group_id = azurerm_management_group.corp[0].id
+  subscription_id     = "/subscriptions/${var.subscription_id}"
+}
+
+resource "azurerm_management_group_policy_assignment" "deny_public_ips" {
+  count                = var.enable_management_group ? 1 : 0
+  name                 = "deny-public-ips"
+  display_name         = "Deny public IPs - Corp"
+  management_group_id  = azurerm_management_group.corp[0].id
+  policy_definition_id = azurerm_management_group_policy_set_definition.deny_public_ips[0].id
+  enforce              = true
+}
+
+resource "azurerm_subscription_policy_assignment" "deny_public_ips" {
+  count                = var.enable_management_group ? 0 : 1
+  name                 = "deny-public-ips"
+  display_name         = "Deny public IPs - Lab subscription"
+  subscription_id      = "/subscriptions/${var.subscription_id}"
+  policy_definition_id = azurerm_policy_set_definition.deny_public_ips[0].id
+  enforce              = true
+}

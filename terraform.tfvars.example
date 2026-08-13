@@ -1,0 +1,13 @@
+subscription_id = "00000000-0000-0000-0000-000000000000"
+tenant_id       = "00000000-0000-0000-0000-000000000000"
+existing_resource_group_name = "1-8eff4f70-playground-sandbox"
+location                     = "westus"
+prefix          = "contoso-lab1"
+
+# Leave false for a normal single-subscription lab. Enabling this can move the
+# subscription under a new Corp management group and requires tenant-root rights.
+enable_management_group = false
+
+tags = {
+  owner = "student-name"
+}
