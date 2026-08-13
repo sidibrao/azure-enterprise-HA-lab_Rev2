@@ -1,6 +1,6 @@
 # Azure Enterprise HA Landing Zone — Rev2
 
-Start with the complete [Low-Level Design and Fresh-Sandbox Deployment Guide](docs/LLD-FRESH-SANDBOX-DEPLOYMENT-GUIDE.md). It covers Lab 0, Portal-first learning, Terraform deployment, DNS, WAF, SQL interaction, HA testing, troubleshooting and cleanup.
+Start with the complete [Low-Level Design and Fresh-Sandbox Deployment Guide](docs/LLD-FRESH-SANDBOX-DEPLOYMENT-GUIDE.md). It covers Lab 0 remote-state bootstrap, Portal-first learning, Terraform deployment, DNS, WAF, SQL interaction, HA testing, troubleshooting and cleanup.
 
 > **Status:** Labs 1 and 4 are implemented and Azure-validated. Lab 9 governance
 > remains capability-gated by tenant and management-group permissions.

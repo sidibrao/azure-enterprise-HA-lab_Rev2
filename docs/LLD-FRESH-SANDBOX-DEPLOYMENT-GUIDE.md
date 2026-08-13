@@ -18,6 +18,7 @@ learning path followed by the reproducible Terraform path.
 - Authenticate VS Code terminal with device-code login.
 - select the new subscription and discover the assigned resource group.
 - Verify permissions, providers, region, zones, quotas and clean Terraform state.
+- Bootstrap an encrypted Azure Blob Storage remote backend with state locking.
 
 ### Lab 1 — Corp application landing zone
 
@@ -252,6 +253,86 @@ done
 
 If this repository was freshly cloned, there is no old state to archive.
 
+### Bootstrap the remote Terraform backend
+
+Azure Blob Storage is the Azure equivalent of an AWS S3 Terraform backend:
+
+| AWS pattern | Azure pattern |
+|---|---|
+| S3 bucket | Storage Account plus private blob container |
+| S3 object key | Blob name (`key`) |
+| DynamoDB lock table | Azure Blob lease; no separate lock database required |
+| SSE encryption | Storage Service Encryption, enabled by default |
+
+The backend must exist before the main Terraform configuration can use it. Lab 0
+therefore creates it with Azure CLI, independently of the application state:
+
+```bash
+chmod +x bootstrap-state-backend.sh
+./bootstrap-state-backend.sh
+source .backend.env
+terraform init -reconfigure -backend-config=backend.hcl
+```
+
+The script automatically discovers the active sandbox resource group and region,
+then creates or reuses:
+
+- A globally unique StorageV2 account using Standard LRS.
+- A private `tfstate` blob container.
+- Blob `azure-enterprise-ha-rev2.tfstate`.
+- TLS 1.2 minimum, HTTPS-only traffic and disabled public blob access.
+
+It writes two ignored local files:
+
+- `backend.hcl`: non-secret backend coordinates.
+- `.backend.env`: Storage Account access key exported as `ARM_ACCESS_KEY`.
+
+Never commit `.backend.env`. Source it again in a new terminal before Terraform
+commands. Verify the remote state after the first apply:
+
+```bash
+source .backend.env
+az storage blob list \
+  --account-name "$(awk -F'"' '/storage_account_name/ {print $2}' backend.hcl)" \
+  --container-name tfstate \
+  --account-key "$ARM_ACCESS_KEY" \
+  --query '[].{Name:name,Bytes:properties.contentLength}' -o table
+```
+
+#### Persistence warning
+
+If the Storage Account is created inside `*-playground-sandbox`, the remote state
+is locked and shared during that sandbox session, but sandbox cleanup deletes it.
+To retain state across new sandboxes, supply a persistent resource group from a
+subscription you control:
+
+```bash
+./bootstrap-state-backend.sh <persistent-state-resource-group> <region>
+```
+
+The sandbox identity must have access to that persistent Storage Account. A new
+disposable subscription cannot use yesterday's remote state to manage resources
+that no longer exist; normally use a new state key/backend for each sandbox.
+
+#### Existing local state versus a new sandbox
+
+For a brand-new sandbox, archive yesterday's local state as shown above and use:
+
+```bash
+terraform init -reconfigure -backend-config=backend.hcl
+```
+
+To migrate a still-valid current environment from local state into Blob Storage,
+do not archive it. Bootstrap the backend and run:
+
+```bash
+source .backend.env
+terraform init -migrate-state -backend-config=backend.hcl
+```
+
+Read the migration prompt carefully and answer `yes` only when the local state
+belongs to the same live subscription and resources.
+
 ## 7. Portal-first deployment walkthrough
 
 Build this manually for learning only in a fresh disposable sandbox. Use the
@@ -312,7 +393,8 @@ Never run only `main.tf`; Terraform loads every `.tf` file in the current folder
 as one configuration. Files are separated only for human organization.
 
 ```bash
-terraform init -upgrade
+source .backend.env
+terraform init -reconfigure -backend-config=backend.hcl -upgrade
 terraform fmt -check -recursive
 terraform validate
 terraform test
