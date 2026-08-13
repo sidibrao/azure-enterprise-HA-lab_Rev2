@@ -1,0 +1,54 @@
+from flask import Flask, jsonify, request
+import os, socket, re, pyodbc
+
+app = Flask(__name__)
+CONNECTION = os.environ["SQL_CONNECTION"]
+ZONE = "${zone}"
+PRIVATE_IP = "${private_ip}"
+
+def db():
+    return pyodbc.connect(CONNECTION, timeout=8)
+
+def initialize():
+    with db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("IF OBJECT_ID('dbo.Messages', 'U') IS NULL CREATE TABLE dbo.Messages (Id INT IDENTITY(1,1) PRIMARY KEY, Name NVARCHAR(60) NOT NULL, Message NVARCHAR(240) NOT NULL, CreatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME())")
+        cursor.execute("IF NOT EXISTS (SELECT 1 FROM dbo.Messages) INSERT INTO dbo.Messages (Name, Message) VALUES (?, ?)", "Contoso", "Welcome to the zone-resilient WAF lab")
+        conn.commit()
+
+@app.get("/health")
+@app.get("/api/health")
+def health():
+    try:
+        with db() as conn:
+            conn.cursor().execute("SELECT 1").fetchone()
+        database = "connected"
+    except Exception:
+        database = "unavailable"
+    return jsonify(status="healthy", api_zone=ZONE, api_vm=socket.gethostname(), api_ip=PRIVATE_IP, database=database)
+
+@app.get("/api/messages")
+def messages():
+    with db() as conn:
+        rows = conn.cursor().execute("SELECT TOP 25 Id, Name, Message, CONVERT(VARCHAR(33), CreatedAt, 126) FROM dbo.Messages ORDER BY Id DESC").fetchall()
+    return jsonify([{"id": r[0], "name": r[1], "message": r[2], "created_at": r[3], "served_by": socket.gethostname(), "api_zone": ZONE} for r in rows])
+
+@app.post("/api/messages")
+def create_message():
+    body = request.get_json(silent=True) or {}
+    name = str(body.get("name", "")).strip()
+    message = str(body.get("message", "")).strip()
+    if not re.fullmatch(r"[A-Za-z0-9 .'-]{2,60}", name):
+        return jsonify(error="Name must be 2-60 safe characters."), 400
+    if len(message) < 3 or len(message) > 240:
+        return jsonify(error="Message must be 3-240 characters."), 400
+    with db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("INSERT INTO dbo.Messages (Name, Message) OUTPUT INSERTED.Id VALUES (?, ?)", name, message)
+        record_id = int(cursor.fetchone()[0])
+        conn.commit()
+    return jsonify(id=record_id, status="created", served_by=socket.gethostname(), api_zone=ZONE), 201
+
+if __name__ == "__main__":
+    initialize()
+    app.run(host="0.0.0.0", port=8000)

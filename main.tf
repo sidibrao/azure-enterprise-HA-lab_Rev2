@@ -89,6 +89,7 @@ resource "azurerm_public_ip" "firewall" {
   resource_group_name = data.azurerm_resource_group.sandbox.name
   allocation_method   = "Static"
   sku                 = "Standard"
+  domain_name_label   = "erp-web-${random_string.suffix.result}"
   tags                = local.common_tags
 }
 
@@ -129,7 +130,7 @@ resource "azurerm_firewall_policy_rule_collection_group" "egress" {
         type = "Http"
         port = 80
       }
-      source_addresses  = ["10.2.0.0/16"]
+      source_addresses  = ["10.2.0.0/16", "10.3.0.0/16"]
       destination_fqdns = ["*.ubuntu.com", "ubuntu.com"]
     }
   }

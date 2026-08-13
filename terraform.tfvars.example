@@ -7,6 +7,12 @@ prefix          = "contoso-lab1"
 # Leave false for a normal single-subscription lab. Enabling this can move the
 # subscription under a new Corp management group and requires tenant-root rights.
 enable_management_group = false
+deploy_test_vm          = true
+
+# Lab 4: Online application landing zone.
+enable_lab4   = true
+lab4_vm_size  = "Standard_B1s"
+lab4_waf_mode = "Prevention"
 
 tags = {
   owner = "student-name"

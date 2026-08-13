@@ -28,6 +28,9 @@ prefix                       = "contoso-lab1"
 
 enable_management_group = false
 deploy_test_vm          = true
+enable_lab4              = true
+lab4_vm_size             = "Standard_B1s"
+lab4_waf_mode            = "Prevention"
 
 tags = {
   owner = "sid"

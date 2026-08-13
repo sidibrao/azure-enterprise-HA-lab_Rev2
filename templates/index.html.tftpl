@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Contoso HA Web Tier | ${node_key}</title>
+  <style>
+    :root { color-scheme: dark; --bg:#070b16; --panel:#111827; --line:#243047; --text:#e5e7eb; --muted:#94a3b8; --blue:#38bdf8; --green:#34d399; --purple:#a78bfa; }
+    * { box-sizing: border-box; }
+    body { margin:0; min-height:100vh; font-family:Inter,ui-sans-serif,system-ui,sans-serif; color:var(--text); background:radial-gradient(circle at 15% 10%,#172554 0,transparent 32%),radial-gradient(circle at 85% 80%,#312e81 0,transparent 28%),var(--bg); }
+    main { width:min(1040px,calc(100% - 32px)); margin:0 auto; padding:64px 0; }
+    .status { display:inline-flex; align-items:center; gap:9px; padding:7px 12px; border:1px solid #14532d; border-radius:999px; background:#052e16; color:#86efac; font-size:13px; font-weight:700; }
+    .dot { width:8px; height:8px; border-radius:50%; background:var(--green); box-shadow:0 0 14px var(--green); }
+    h1 { margin:22px 0 8px; font-size:clamp(36px,6vw,64px); letter-spacing:-.04em; }
+    .lead { color:var(--muted); font-size:18px; margin:0 0 34px; }
+    .node { color:var(--blue); }
+    .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:14px; }
+    .card { padding:20px; border:1px solid var(--line); border-radius:16px; background:rgba(17,24,39,.82); backdrop-filter:blur(12px); box-shadow:0 18px 50px rgba(0,0,0,.22); }
+    .label { color:var(--muted); text-transform:uppercase; letter-spacing:.12em; font-size:11px; font-weight:800; }
+    .value { margin-top:9px; font-size:18px; font-weight:750; overflow-wrap:anywhere; }
+    .zone { color:var(--purple); font-size:28px; }
+    .path { margin-top:16px; padding:20px; border:1px solid var(--line); border-radius:16px; background:rgba(2,6,23,.76); color:var(--muted); line-height:1.8; }
+    .path strong { color:var(--text); }
+    .arrow { color:var(--blue); padding:0 7px; }
+    footer { margin-top:24px; color:#64748b; font-size:13px; }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="status"><span class="dot"></span> HEALTHY BACKEND</div>
+    <h1>Contoso <span class="node">HA Web Tier</span></h1>
+    <p class="lead">This response was served by one private, zonal backend behind Azure Firewall and an internal load balancer.</p>
+    <section class="grid">
+      <article class="card"><div class="label">Availability zone</div><div class="value zone">Zone ${zone}</div></article>
+      <article class="card"><div class="label">Azure region</div><div class="value">${region}</div></article>
+      <article class="card"><div class="label">Virtual machine</div><div class="value">${vm_name}</div></article>
+      <article class="card"><div class="label">Hostname</div><div class="value">${hostname}</div></article>
+      <article class="card"><div class="label">Private IP</div><div class="value">${private_ip}</div></article>
+      <article class="card"><div class="label">Network interface</div><div class="value">${nic_name} / eth0</div></article>
+      <article class="card"><div class="label">Internal load balancer</div><div class="value">${load_balancer_ip}:80</div></article>
+      <article class="card"><div class="label">Firewall public endpoint</div><div class="value">${firewall_public_ip}:80</div></article>
+    </section>
+    <div class="path"><strong>Request path</strong><br>Internet <span class="arrow">→</span> Azure Firewall DNAT <span class="arrow">→</span> Internal Load Balancer <span class="arrow">→</span> ${node_key}</div>
+    <footer>Environment: ${environment} · Managed by Terraform · No public IP is attached to this VM.</footer>
+  </main>
+</body>
+</html>

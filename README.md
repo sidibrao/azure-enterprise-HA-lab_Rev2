@@ -1,8 +1,9 @@
 # Azure Enterprise HA Landing Zone — Rev2
 
-> **Status:** architecture and implementation baseline. Rev1 resources are
-> represented by the current Terraform; the multi-zone ALZ, WAF, load-balancer,
-> and governance additions shown below are the target for Labs 1, 4, and 9.
+Start with the complete [Low-Level Design and Fresh-Sandbox Deployment Guide](docs/LLD-FRESH-SANDBOX-DEPLOYMENT-GUIDE.md). It covers Lab 0, Portal-first learning, Terraform deployment, DNS, WAF, SQL interaction, HA testing, troubleshooting and cleanup.
+
+> **Status:** Labs 1 and 4 are implemented and Azure-validated. Lab 9 governance
+> remains capability-gated by tenant and management-group permissions.
 
 ## What Rev2 contains today
 
@@ -11,19 +12,18 @@ Terraform for that component exists.
 
 | Component | Terraform status | Azure status |
 |---|---|---|
-| Rev1 hub, spoke, firewall, ERP VM and one web VM | Implemented in root `.tf` files | Previously deployed and validated in the first sandbox |
+| Hub, firewall, Corp spoke and ERP VM | Implemented | Azure validated |
 | Rev2 Section 1 — ALZ hierarchy | Design/code reference only | Not deployed |
-| Rev2 Section 1 — two zonal web VMs | Planned | Not deployed |
-| Rev2 Section 1 — Internal Standard Load Balancer | Planned | Not deployed |
-| Rev2 Section 4 — Application Gateway WAF_v2 | Planned | Not deployed |
+| Rev2 Section 1 — two zonal web VMs and internal LB | Implemented | Azure validated, including failover |
+| Rev2 Section 1 — public/private DNS | Implemented | Azure validated |
+| Rev2 Section 4 — Online spoke, WAF_v2, four zonal VMs, private SQL and DNS | Implemented | Azure validated, including WAF, data and failover tests |
 | Rev2 Section 4 — DDoS IP Protection | Capability-gated plan | Not deployed |
 | Rev2 Section 9 — policy/RBAC guardrails | Partial reference in `policy.tf.disabled` | Not deployed due to sandbox permissions |
 | Rev2 Section 9 — GitHub drift workflow | Planned | Not configured |
 
-Running Terraform from the repository root **today deploys the Rev1 baseline**.
-It does not yet create the load balancer, zonal VM pair, WAF, management groups,
-or Lab 9 initiative. Those will be implemented and enabled section-by-section so
-each change can be planned, tested, and demonstrated independently.
+Running Terraform from the repository root deploys the Corp and Online landing
+zone lab resources. See [Lab 4 runbook](docs/LAB4-WAF-ONLINE-RUNBOOK.md) for the
+application, DNS, portal, Terraform and validation workflows.
 
 ## Rev2 curriculum sections
 

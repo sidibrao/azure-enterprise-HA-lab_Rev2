@@ -20,13 +20,15 @@
 | Section 1 ALZ management groups | Planned | Not deployed | Hierarchy and inheritance report |
 | Section 1 Bicep diagnostics | Planned | Not deployed | Diagnostic settings listed |
 | Section 1 PowerShell inheritance report | Planned | Not deployed | Policy/RBAC report artifacts |
-| Section 1 zonal web VM 1 | Planned | Not deployed | Zone 1, IP `10.2.2.11`, healthy |
-| Section 1 zonal web VM 2 | Planned | Not deployed | Zone 2, IP `10.2.2.12`, healthy |
-| Section 1 internal Standard Load Balancer | Planned | Not deployed | Frontend `10.2.2.20`, two healthy backends |
-| Section 1 firewall DNAT to ILB | Planned | Not deployed | HTTP reaches both nodes |
-| Section 4 Application Gateway WAF_v2 | Planned | Not deployed | Healthy zone-redundant gateway |
-| Section 4 OWASP managed rules | Planned | Not deployed | SQLi-style request blocked/logged |
-| Section 4 custom header rule | Planned | Not deployed | `X-Lab-Block: true` blocked/logged |
+| Section 1 zonal web VM pair | Implemented | Azure validated | Zones 1/2, `10.2.2.11-12`, healthy/failover passed |
+| Section 1 internal Standard Load Balancer | Implemented | Azure validated | Frontend `10.2.2.20`, two healthy backends |
+| Section 1 firewall DNAT and DNS | Implemented | Azure validated | `erp-web-yo2oo.eastus.cloudapp.azure.com` |
+| Section 4 Application Gateway WAF_v2 | Implemented | Azure validated | Two healthy zonal frontend backends |
+| Section 4 OWASP 3.2 managed rules | Implemented | Azure validated | SQLi-style request returned HTTP 403 |
+| Section 4 custom header rule | Implemented | Azure validated | `X-Lab-Block: true` returned HTTP 403 |
+| Section 4 frontend/API zonal pairs | Implemented | Azure validated | Both independent failover tests passed |
+| Section 4 Azure SQL Basic/private endpoint | Implemented | Azure validated | Seed/create/read/validation tests passed |
+| Section 4 public/private DNS | Implemented | Azure validated | WAF, frontend, API and SQL names resolve at intended scopes |
 | Section 4 DDoS IP Protection | Capability-gated | Not deployed | Protection status or design record |
 | Section 9 policy initiative | Planned | Not deployed | Deny/audit/remediation evidence |
 | Section 9 RBAC groups and roles | Capability-gated | Not deployed | Scope boundary report |

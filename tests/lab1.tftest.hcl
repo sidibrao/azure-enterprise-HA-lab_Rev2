@@ -44,8 +44,28 @@ run "corp_landing_zone_contract" {
   }
 
   assert {
-    condition     = azurerm_network_interface.web.ip_configuration[0].private_ip_address == "10.2.2.10"
-    error_message = "The web VM must retain its documented private address."
+    condition     = azurerm_network_interface.web["zone1"].ip_configuration[0].private_ip_address == "10.2.2.11"
+    error_message = "The Zone 1 web VM must use 10.2.2.11."
+  }
+
+  assert {
+    condition     = azurerm_network_interface.web["zone2"].ip_configuration[0].private_ip_address == "10.2.2.12"
+    error_message = "The Zone 2 web VM must use 10.2.2.12."
+  }
+
+  assert {
+    condition     = azurerm_linux_virtual_machine.web["zone1"].zone == "1" && azurerm_linux_virtual_machine.web["zone2"].zone == "2"
+    error_message = "The HA web nodes must be distributed across zones 1 and 2."
+  }
+
+  assert {
+    condition     = azurerm_lb.web.frontend_ip_configuration[0].private_ip_address == "10.2.2.20"
+    error_message = "The internal load balancer frontend must use 10.2.2.20."
+  }
+
+  assert {
+    condition     = azurerm_lb_probe.web.request_path == "/health"
+    error_message = "The load balancer must probe the /health endpoint."
   }
 
   assert {

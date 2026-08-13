@@ -37,6 +37,35 @@ variable "admin_username" {
   default     = "azureadmin"
 }
 
+variable "web_vm_size" {
+  description = "SKU used by both zonal web nodes."
+  type        = string
+  default     = "Standard_B1s"
+}
+
+variable "enable_lab4" {
+  description = "Deploy the Online landing zone with WAF, zonal frontend/API tiers, private DNS, and Azure SQL."
+  type        = bool
+  default     = true
+}
+
+variable "lab4_vm_size" {
+  description = "Low-cost SKU used by the four Lab 4 application VMs."
+  type        = string
+  default     = "Standard_B1s"
+}
+
+variable "lab4_waf_mode" {
+  description = "Application Gateway WAF operating mode."
+  type        = string
+  default     = "Prevention"
+
+  validation {
+    condition     = contains(["Detection", "Prevention"], var.lab4_waf_mode)
+    error_message = "lab4_waf_mode must be Detection or Prevention."
+  }
+}
+
 variable "enable_management_group" {
   description = "Create the Corp management group, associate this subscription, and assign policy at MG scope. Requires tenant-root permissions."
   type        = bool
