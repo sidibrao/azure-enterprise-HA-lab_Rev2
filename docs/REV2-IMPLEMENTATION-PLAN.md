@@ -91,7 +91,7 @@ production request path.
 | Internal Load Balancer | `10.2.2.20` |
 | Workload default route | `0.0.0.0/0 -> 10.1.0.4` |
 
-## Lab 1 — ALZ skeleton
+## Rev2 Section 1 — ALZ and Multi-Zone HA Foundation
 
 ### Full tenant mode
 
@@ -131,7 +131,7 @@ enable_tenant_governance = false
 The sandbox mode validates organization, tags, diagnostics, routing, and workload
 boundaries without pretending that management groups were actually deployed.
 
-## High-availability web tier
+### High-availability web tier and Internal Standard Load Balancer
 
 Build:
 
@@ -151,7 +151,7 @@ Validation:
 4. Confirm uninterrupted service from Zone 2.
 5. Restart Zone 1 and confirm health recovery.
 
-## Lab 4 — WAF and DDoS
+## Rev2 Section 4 — WAF and DDoS Secure Ingress
 
 Build:
 
@@ -176,7 +176,7 @@ curl -i 'http://<waf-ip>/?id=%27%20OR%201=1--'
 Confirm allowed traffic, blocked test traffic, WAF logs, and absence of direct
 backend public access.
 
-## Lab 9 — governance and drift control
+## Rev2 Section 9 — Governance and Drift Control
 
 Policy initiative:
 

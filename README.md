@@ -4,6 +4,38 @@
 > represented by the current Terraform; the multi-zone ALZ, WAF, load-balancer,
 > and governance additions shown below are the target for Labs 1, 4, and 9.
 
+## What Rev2 contains today
+
+The distinction below is important: an architecture diagram is not proof that
+Terraform for that component exists.
+
+| Component | Terraform status | Azure status |
+|---|---|---|
+| Rev1 hub, spoke, firewall, ERP VM and one web VM | Implemented in root `.tf` files | Previously deployed and validated in the first sandbox |
+| Rev2 Section 1 — ALZ hierarchy | Design/code reference only | Not deployed |
+| Rev2 Section 1 — two zonal web VMs | Planned | Not deployed |
+| Rev2 Section 1 — Internal Standard Load Balancer | Planned | Not deployed |
+| Rev2 Section 4 — Application Gateway WAF_v2 | Planned | Not deployed |
+| Rev2 Section 4 — DDoS IP Protection | Capability-gated plan | Not deployed |
+| Rev2 Section 9 — policy/RBAC guardrails | Partial reference in `policy.tf.disabled` | Not deployed due to sandbox permissions |
+| Rev2 Section 9 — GitHub drift workflow | Planned | Not configured |
+
+Running Terraform from the repository root **today deploys the Rev1 baseline**.
+It does not yet create the load balancer, zonal VM pair, WAF, management groups,
+or Lab 9 initiative. Those will be implemented and enabled section-by-section so
+each change can be planned, tested, and demonstrated independently.
+
+## Rev2 curriculum sections
+
+| Section | Name | Primary outcome | Details |
+|---|---|---|---|
+| Rev2 Section 1 | ALZ and Multi-Zone HA Foundation | Landing-zone model plus two zonal web VMs behind an internal Standard Load Balancer | [Section 1](sections/rev2-section-01-alz-ha/README.md) |
+| Rev2 Section 4 | WAF and DDoS Secure Ingress | Application Gateway WAF_v2, OWASP/custom rules, secure private backends | [Section 4](sections/rev2-section-04-waf-ddos/README.md) |
+| Rev2 Section 9 | Governance and Drift Control | Policy initiative, group-based RBAC, exemptions, diagnostics and drift detection | [Section 9](sections/rev2-section-09-governance-drift/README.md) |
+
+The cross-section status dashboard is in
+[IMPLEMENTATION-STATUS.md](docs/IMPLEMENTATION-STATUS.md).
+
 Terraform lab implementing a restricted-sandbox version of an Azure Corp
 application landing zone. It demonstrates centralized egress inspection, private
 workload VMs, hub-and-spoke routing, Azure Firewall DNAT, and centralized logs.
