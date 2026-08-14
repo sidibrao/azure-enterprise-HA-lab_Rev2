@@ -35,7 +35,7 @@
 | Section 3 exemptions | Planned | Not deployed | Approved exemption example |
 | Section 3 drift workflow | Planned | Not configured | Scheduled/PR plan result |
 
-## Planned Terraform file map
+## Repository and future module map
 
 ```text
 modules/
@@ -52,21 +52,18 @@ modules/
 
 sections/
 ├── rev2-section-01-alz-ha/
-│   ├── terraform/
-│   ├── bicep/
-│   ├── powershell/
 │   └── README.md
-├── rev2-section-04-waf-ddos/       # historical path; learner Section 2
-│   ├── terraform/
+├── rev2-section-02-waf-private-data/
 │   └── README.md
-└── rev2-section-09-governance-drift/ # historical path; learner Section 3
-    ├── terraform/
-    ├── powershell/
+└── rev2-section-03-governance-drift/
     └── README.md
 ```
 
-These directories are the implementation targets. They are not marked
-Implemented until executable files exist and their tests pass.
+The executable sandbox Terraform currently remains in the repository root so
+all top-level `.tf` files form one state-compatible configuration. The module
+directories above are future refactoring targets, not current deployment entry
+points. A future refactor must use `moved` blocks or `terraform state mv` to
+preserve resource addresses.
 
 ## Completion rule
 

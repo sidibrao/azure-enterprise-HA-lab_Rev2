@@ -65,7 +65,7 @@ Diagnostics -> central Log Analytics workspace
 | DDoS paid protection | Design only | Not deployed for lab cost |
 
 See [Implementation Status](docs/IMPLEMENTATION-STATUS.md) for the evidence
-matrix and [Lab 2 Runbook](docs/LAB4-WAF-ONLINE-RUNBOOK.md) for application and
+matrix and [Lab 2 Runbook](docs/LAB2-WAF-ONLINE-RUNBOOK.md) for application and
 WAF tests.
 
 ## Repository map
@@ -171,10 +171,12 @@ Do not delete the backend or local backend files until destruction completes.
 
 ## Documentation
 
+- [Documentation index](docs/README.md)
 - [Complete LLD and deployment guide](docs/LLD-FRESH-SANDBOX-DEPLOYMENT-GUIDE.md)
-- [Lab 2 WAF/Online runbook](docs/LAB4-WAF-ONLINE-RUNBOOK.md)
+- [Lab 2 WAF/Online runbook](docs/LAB2-WAF-ONLINE-RUNBOOK.md)
 - [Implementation status](docs/IMPLEMENTATION-STATUS.md)
 - [Rev2 implementation plan](docs/REV2-IMPLEMENTATION-PLAN.md)
+- [Sequential lab index](sections/README.md)
 - [Fresh-sandbox quick rebuild](TOMORROW.md)
 
 The appendix of the complete guide contains the legacy-to-sequential naming

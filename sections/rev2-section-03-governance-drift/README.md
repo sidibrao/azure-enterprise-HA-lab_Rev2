@@ -1,7 +1,7 @@
 # Rev2 Section 3 — Governance and Drift Control
 
-The directory retains `section-09` as a historical path. The learner-facing
-Rev2 sequence calls this Lab 3/Section 3.
+This is Lab 3/Section 3 in the sequential Rev2 curriculum. It corresponds to
+the original Lab 9 governance requirement.
 
 ## Outcome
 

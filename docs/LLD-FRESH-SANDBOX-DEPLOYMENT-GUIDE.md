@@ -1149,6 +1149,6 @@ Apply failed
 | `.terraform/` | No | Provider/backend cache; recreated by `terraform init` |
 | Remote state blob | Never | Preserve until Terraform destroy completes |
 
-The repository may retain historical filenames containing `lab4` or section
-paths containing `04`/`09`. They are compatibility identifiers, not the current
-learner sequence.
+Terraform source filenames and resource addresses may retain `lab4` for state
+compatibility. Learner-facing documentation and section directories use the
+current sequential Lab 0–3 naming.
