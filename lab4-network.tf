@@ -61,6 +61,10 @@ resource "azurerm_virtual_network_peering" "hub_to_online" {
   virtual_network_name      = azurerm_virtual_network.hub.name
   remote_virtual_network_id = azurerm_virtual_network.online[0].id
   allow_forwarded_traffic   = true
+
+  # Create the reverse peering only after the Online VNet has finished all
+  # subnet updates and its first peering operation.
+  depends_on = [azurerm_virtual_network_peering.online_to_hub]
 }
 
 resource "azurerm_virtual_network_peering" "online_to_hub" {
@@ -70,6 +74,15 @@ resource "azurerm_virtual_network_peering" "online_to_hub" {
   virtual_network_name      = azurerm_virtual_network.online[0].name
   remote_virtual_network_id = azurerm_virtual_network.hub.id
   allow_forwarded_traffic   = true
+
+  # Azure rejects peering updates while independent subnet PUT operations are
+  # still updating the VNet. Serialize peering after every Online subnet.
+  depends_on = [
+    azurerm_subnet.appgw,
+    azurerm_subnet.online_api,
+    azurerm_subnet.online_frontend,
+    azurerm_subnet.online_private_endpoints,
+  ]
 }
 
 resource "azurerm_route_table" "online" {

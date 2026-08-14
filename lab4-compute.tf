@@ -122,6 +122,8 @@ resource "azurerm_linux_virtual_machine" "online_api" {
     azurerm_private_dns_zone_virtual_network_link.sql_online,
     azurerm_private_endpoint.sql,
     azurerm_subnet_route_table_association.online_api,
+    azurerm_virtual_network_peering.hub_to_online,
+    azurerm_virtual_network_peering.online_to_hub,
   ]
 }
 
@@ -147,6 +149,8 @@ resource "azurerm_virtual_machine_extension" "online_api_config" {
     azurerm_firewall.this,
     azurerm_private_dns_zone_virtual_network_link.sql_online,
     azurerm_private_endpoint.sql,
+    azurerm_virtual_network_peering.hub_to_online,
+    azurerm_virtual_network_peering.online_to_hub,
   ]
 }
 
@@ -184,6 +188,8 @@ resource "azurerm_linux_virtual_machine" "online_frontend" {
     azurerm_firewall_policy_rule_collection_group.egress,
     azurerm_private_dns_a_record.online_api_pool,
     azurerm_subnet_route_table_association.online_frontend,
+    azurerm_virtual_network_peering.hub_to_online,
+    azurerm_virtual_network_peering.online_to_hub,
   ]
 }
 
@@ -212,5 +218,7 @@ resource "azurerm_virtual_machine_extension" "online_frontend_config" {
   depends_on = [
     azurerm_firewall.this,
     azurerm_private_dns_a_record.online_api_pool,
+    azurerm_virtual_network_peering.hub_to_online,
+    azurerm_virtual_network_peering.online_to_hub,
   ]
 }
