@@ -3,7 +3,7 @@
 ## Low-Level Design and Fresh-Sandbox Deployment Guide
 
 This document is the complete learner runbook for deploying and validating Lab
-0, Lab 1 and Lab 4 from a new Real Hands-On Labs sandbox. It covers a Portal-first
+0, Lab 1 and Lab 2 from a new Real Hands-On Labs sandbox. It covers a Portal-first
 learning path followed by the reproducible Terraform path.
 
 > Do not store sandbox usernames, passwords, client secrets, SQL passwords,
@@ -32,7 +32,7 @@ learning path followed by the reproducible Terraform path.
 - Public Azure DNS and private `hub.contoso.internal` / `corp.contoso.internal`.
 - Central Firewall diagnostics in Log Analytics.
 
-### Lab 4 — Online application landing zone
+### Lab 2 — Online application landing zone
 
 - Separate Online spoke `10.3.0.0/16`.
 - One logical Application Gateway WAF_v2 spanning zones 1 and 2.
@@ -59,7 +59,7 @@ Tenant
     ├── Landing Zones / Corp (modeled)
     │   └── ERP spoke and Lab 1 application
     └── Landing Zones / Online (modeled)
-        └── Online spoke and Lab 4 WAF application
+        └── Online spoke and Lab 2 WAF application
 ```
 
 In production, Platform, Corp and Online normally use separate subscriptions
@@ -106,7 +106,7 @@ Tenant root management group
     │   └── Identity         -> identity services subscription when required
     ├── Landing Zones
     │   ├── Corp             -> sub-erp-prod; private/hybrid workloads (Lab 1)
-    │   └── Online           -> sub-portal-prod; internet-facing workloads (Lab 4)
+    │   └── Online           -> sub-portal-prod; internet-facing workloads (Lab 2)
     ├── Sandbox              -> isolated experimentation subscriptions
     └── Decommissioned       -> disabled/cancelled subscriptions pending removal
 ```
@@ -163,7 +163,7 @@ Private VM egress
   -> Azure Firewall 10.1.0.4
   -> allowed FQDN rule or deny/log
 
-LAB 4 — ONLINE
+LAB 2 — ONLINE
 
 Internet
   -> contoso-portal-<suffix>.<region>.cloudapp.azure.com:80
@@ -318,7 +318,7 @@ sed -n '1,80p' terraform.tfvars
 ```
 
 Confirm `subscription_id`, `tenant_id`, resource-group name and location match
-the new sandbox. The generated file enables Lab 4 by default.
+the new sandbox. The generated file enables Lab 2 by default.
 
 ### State rule for a new sandbox
 
@@ -445,7 +445,7 @@ Terraform build.
     `corp.contoso.internal`, then add the records in section 4.
 13. Send Firewall logs/metrics to Log Analytics.
 
-### Lab 4 in Portal
+### Lab 2 in Portal
 
 1. Create Online VNet `10.3.0.0/16` and the four subnets in section 4.
 2. Peer Hub and Online in both directions.
@@ -606,7 +606,7 @@ normal sequence is:
 2. Policy library            -> definitions and initiatives
 3. Policy assignments        -> management-group scopes and exemptions
 4. Subscription vending      -> place Corp/Online subscriptions in hierarchy
-5. Workload deployment       -> this Lab 1/Lab 4 stack
+5. Workload deployment       -> this Lab 1/Lab 2 stack
 6. Compliance validation     -> query effective assignments and test controls
 ```
 
@@ -674,7 +674,7 @@ getent hosts web-zone1.corp.contoso.internal
 getent hosts web-zone2.corp.contoso.internal
 ```
 
-### Lab 4 browser/database
+### Lab 2 browser/database
 
 Open `$LAB4_URL`, enter a 2–60 character safe name and a 3–240 character
 message, then select **Validate & save to SQL**. The new record appears in the
@@ -734,7 +734,7 @@ az vm run-command invoke -g <sandbox-resource-group> \
   --scripts 'systemctl start nginx; systemctl is-active nginx'
 ```
 
-### Lab 4 API failover
+### Lab 2 API failover
 
 ```bash
 az vm run-command invoke -g <sandbox-resource-group> \
@@ -747,7 +747,7 @@ az vm run-command invoke -g <sandbox-resource-group> \
   --scripts 'systemctl start contoso-api; systemctl is-active contoso-api'
 ```
 
-### Lab 4 frontend failover
+### Lab 2 frontend failover
 
 ```bash
 az vm run-command invoke -g <sandbox-resource-group> \
@@ -793,7 +793,7 @@ Capture these as evidence:
 | Private DNS fails locally | Expected; test from a linked VNet VM |
 | Run Command unavailable | Sandbox restriction/region; inspect VM agent or use extensions |
 | `ReferencedResourceNotProvisioned` during Online peering | Azure was still updating a subnet; use the current dependency-serialized Terraform and create a new plan |
-| Lab 4 extensions cannot reach Ubuntu repositories | Confirm both Online/Hub peerings are `Connected` before retrying extensions |
+| Lab 2 extensions cannot reach Ubuntu repositories | Confirm both Online/Hub peerings are `Connected` before retrying extensions |
 
 Useful guest checks:
 
@@ -805,10 +805,10 @@ getent hosts api.online.contoso.internal
 getent hosts <sql-server>.database.windows.net
 ```
 
-### Recover a partial Lab 4 apply
+### Recover a partial Lab 2 apply
 
 Do not destroy the successfully created platform when the only failed resources
-are `peer-online-to-hub` and the four Lab 4 guest extensions. Never reuse the
+are `peer-online-to-hub` and the four Lab 2 guest extensions. Never reuse the
 saved plan from the failed apply. Confirm that no Terraform process remains,
 then remove only the failed extension instances:
 
@@ -875,7 +875,7 @@ resource group, sandbox expiration will remove it. If it is in a persistent
 resource group that you own, delete that specific backend only after confirming
 the state is empty and that no other Terraform workspace uses it.
 
-Lab 4 guest configuration now runs through dedicated Custom Script extensions
+Lab 2 guest configuration now runs through dedicated Custom Script extensions
 instead of one-shot cloud-init package installation. Both frontend and API
 scripts wait for APT locks, retry package downloads while Firewall/UDR rules
 converge, configure services idempotently, and return failure unless local
@@ -896,3 +896,259 @@ apply. DNS labels and public IPs will change; always obtain them from outputs.
 - DDoS Network Protection/IP Protection where justified.
 - Remote encrypted Terraform state with locking and CI drift detection.
 - Azure Monitor alerts, Defender for Cloud and Sentinel analytics.
+
+## Appendix A — sequential naming and compatibility map
+
+| Rev2 sequence | Original requirement | Learner outcome | Terraform compatibility name |
+|---|---|---|---|
+| Lab 0 | Bootstrap/prerequisites | Identity, tools, variables and remote state | bootstrap/configuration scripts |
+| Lab 1 | Lab 1 ALZ skeleton plus HA enhancement | Corp landing zone and zonal web tier | `web_*`, `lab1_*` |
+| Lab 2 | Lab 4 WAF and DDoS | Online WAF, zonal frontend/API and private SQL | `lab4_*`, `lab4-*.tf` |
+| Lab 3 | Lab 9 governance | Policy, RBAC, remediation and drift design | `policy.tf.disabled` |
+
+The internal `lab4_*` names are intentionally retained. Terraform resource
+addresses are state identities; cosmetic renaming would require explicit
+`moved` blocks or `terraform state mv` for every address. Keeping them prevents
+unnecessary replacement risk while the documentation presents a clean sequence.
+
+## Appendix B — Terraform command and deployment options
+
+Terraform evaluates the directory, not the file currently open in VS Code. Run
+commands from the repository root. All top-level `.tf` files form one module;
+`.tftpl` files are rendered by Terraform and are never executed directly.
+
+### Option 1: interactive apply
+
+```bash
+terraform plan
+terraform apply
+```
+
+`terraform apply` generates a new plan, displays it, and asks for `yes`. This is
+acceptable for disposable practice but does not guarantee that the reviewed
+standalone plan is the plan applied.
+
+### Option 2: reviewed saved plan (recommended)
+
+```bash
+terraform plan -out=deploy.tfplan
+terraform show -no-color deploy.tfplan | less
+terraform apply deploy.tfplan
+```
+
+This applies exactly the saved plan. A plan is tied to its configuration and
+state snapshot. Never reuse it after an error, code edit, import, manual Azure
+change, destroy, or sandbox replacement.
+
+### Option 3: no-drift check
+
+```bash
+terraform plan -detailed-exitcode
+echo "$?"
+```
+
+| Exit | Meaning |
+|---:|---|
+| 0 | Configuration and refreshed state have no changes |
+| 1 | Planning error |
+| 2 | Terraform detected proposed changes |
+
+### Option 4: controlled destroy
+
+```bash
+terraform plan -destroy -out=destroy.tfplan
+terraform show -no-color destroy.tfplan | less
+terraform apply destroy.tfplan
+```
+
+Do not use `terraform destroy` or apply a destroy plan concurrently with another
+Terraform operation. The Blob lease prevents concurrent state writers.
+
+### Complete fresh-sandbox command sequence
+
+```bash
+cd "/home/sadmin/tech projects/Azure Projects/02-azure-enterprise-lab/azure-enterprise-lab_Rev2-HA-ALZ"
+
+az logout
+az account clear
+az login --tenant <tenant-id> --use-device-code
+az account set --subscription <subscription-id>
+az account show -o table
+az group list -o table
+
+./configure-sandbox.sh
+./bootstrap-state-backend.sh
+source .backend.env
+
+terraform init -reconfigure -backend-config=backend.hcl
+terraform fmt -check -recursive
+terraform validate
+terraform test
+terraform plan -out=fresh-sandbox.tfplan
+terraform show -no-color fresh-sandbox.tfplan | less
+terraform apply fresh-sandbox.tfplan
+./validate-deployment.sh
+terraform plan -detailed-exitcode
+```
+
+## Appendix C — detailed Azure Portal build checklist
+
+Use this path only for learning. A Portal-built environment is not automatically
+owned by Terraform. Delete it before the Terraform build or import every matching
+resource; otherwise name collisions and drift are expected.
+
+### C.1 Lab 0 and shared platform
+
+1. Sign in to `portal.azure.com` with the sandbox identity and select the assigned
+   subscription in **Directories + subscriptions**.
+2. Open **Resource groups**, select the pre-created playground resource group,
+   and confirm its subscription. Do not create another group if authorization is
+   resource-group scoped.
+3. Open **Subscriptions → Resource providers**. Confirm `Microsoft.Network`,
+   `Microsoft.Compute`, `Microsoft.OperationalInsights`, `Microsoft.Insights`,
+   and `Microsoft.Sql` are registered. Register only when permitted.
+4. Open **Storage accounts → Create** in the sandbox group. Select Standard,
+   StorageV2, LRS, HTTPS only, TLS 1.2, and disable public blob access. Create a
+   private container named `tfstate`. This is the Portal equivalent of the
+   backend bootstrap script; the normal lab uses the script for reproducibility.
+5. Create **Log Analytics workspace** `law-contoso-lab1-<suffix>` with 30-day
+   retention. All Firewall and WAF diagnostic settings target this workspace.
+
+### C.2 Lab 1 — Hub and Corp
+
+1. **Virtual networks → Create** `vnet-contoso-lab1-hub`, address
+   `10.1.0.0/16`. Add `AzureFirewallSubnet 10.1.0.0/26` and
+   `AzureFirewallManagementSubnet 10.1.1.0/26` using those exact reserved names.
+2. Create `vnet-contoso-lab1-erp-prod`, address `10.2.0.0/16`, with
+   `snet-erp-app 10.2.1.0/24` and `snet-web 10.2.2.0/24`.
+3. From each VNet's **Peerings**, create `peer-hub-to-erp` and
+   `peer-erp-to-hub`; allow virtual-network access and forwarded traffic. Confirm
+   both show **Connected**.
+4. Create Standard static public IPs `pip-contoso-lab1-firewall` and
+   `pip-contoso-lab1-firewall-management`. Add a unique DNS label to the data IP.
+5. Create **Firewall Policy** `afwp-contoso-lab1`, tier Basic. Add an application
+   collection allowing HTTP/80 and HTTPS/443 from `10.2.0.0/16` and
+   `10.3.0.0/16` to `ubuntu.com`, `*.ubuntu.com`, `packages.microsoft.com`, and
+   `*.packages.microsoft.com`.
+6. Create **Azure Firewall** `afw-contoso-lab1-hub`, Basic, in the hub VNet.
+   Bind both public IPs to their corresponding Firewall subnets. Wait for
+   provisioning state **Succeeded**; record private IP `10.1.0.4`.
+7. Create route table `rt-contoso-lab1-erp-egress`, disable BGP propagation, add
+   `0.0.0.0/0 → Virtual appliance → 10.1.0.4`, and associate ERP/web subnets.
+8. Create NSGs for ERP and web. The web NSG permits TCP/80 from the expected
+   Firewall/LB path and Azure Load Balancer probes; do not allow Internet SSH.
+9. Create Ubuntu 22.04 B1s VM `vm-contoso-lab1-erp-test`, private IP
+   `10.2.1.10`, no public IP.
+10. Create Ubuntu 22.04 B1s VMs `vm-contoso-lab1-web-zone1` and `zone2`, private
+    IPs `10.2.2.11/12`, availability zones 1/2, no public IP.
+11. Create Standard internal Load Balancer `lbi-contoso-lab1-web`, frontend
+    `10.2.2.20`, backend pool containing both web NICs, HTTP `/health` probe on
+    port 80, and TCP/80 load-balancing rule.
+12. In the Firewall policy add DNAT: Firewall public IP TCP/80 to
+    `10.2.2.20:80`.
+13. Create private zones `hub.contoso.internal` and `corp.contoso.internal`, link
+    the appropriate VNets, and add records from the address/DNS table.
+14. On Firewall **Diagnostic settings**, send all logs and metrics to the central
+    workspace.
+
+### C.3 Lab 2 — Online WAF and private SQL
+
+1. Create `vnet-contoso-online 10.3.0.0/16` with `snet-appgw 10.3.0.0/24`,
+   `snet-frontend 10.3.1.0/24`, `snet-api 10.3.2.0/24`, and
+   `snet-private-endpoints 10.3.3.0/24`. Finish all subnet changes before peering.
+2. Create `peer-online-to-hub`, wait for **Connected**, then create/confirm
+   `peer-hub-to-online`. Both must show **FullyInSync** before VM configuration.
+3. Create `rt-contoso-online-egress`, route `0.0.0.0/0` to `10.1.0.4`, and
+   associate only frontend/API subnets.
+4. Create frontend NSG allowing TCP/80 from `10.3.0.0/24`. Create API NSG
+   allowing TCP/8000 from `10.3.1.0/24` and the `AzureLoadBalancer` service tag.
+5. Create frontend VMs at `10.3.1.11/12` and API VMs at `10.3.2.11/12`, zones
+   1/2, Ubuntu 22.04 B1s, without public IPs.
+6. Create internal Standard LB `lbi-contoso-online-api`, frontend `10.3.2.20`,
+   both API NICs in the pool, HTTP `/health` probe on 8000 and TCP/8000 rule.
+7. Create private zone `online.contoso.internal`, link Online VNet, and create
+   `frontend`, `fe-zone1/2`, `api`, and `api-zone1/2` records.
+8. Create **SQL server** with TLS 1.2 and public network access disabled. Create a
+   Basic 2-GB database `sqldb-customer-messages`.
+9. Create SQL private endpoint in `snet-private-endpoints`; integrate with
+   `privatelink.database.windows.net` and link the Online VNet. Confirm approval
+   is **Approved** and the normal SQL hostname resolves to the private IP in a VM.
+10. Create Standard static public IP `pip-contoso-online-waf` with a unique DNS
+    label.
+11. Create WAF policy `wafp-contoso-online`, Prevention mode, OWASP 3.2, plus a
+    priority custom rule blocking header `X-Lab-Block` equal to `true`.
+12. Create WAF_v2 Application Gateway `agw-contoso-online`, capacity 2, zones 1
+    and 2, dedicated subnet, public frontend, HTTP listener, frontend VM backend
+    addresses `.11/.12`, HTTP `/health` probe and routing rule.
+13. Send Application Gateway access, performance, firewall logs and metrics to
+    the central Log Analytics workspace.
+14. Configure Nginx/API with the repository's repeatable extension templates.
+    Terraform is recommended for this step because Portal Run Command is not a
+    durable source of configuration.
+15. Confirm backend health is **Healthy**, normal requests return 200, both WAF
+    test requests return 403, and `/api/health` reports SQL `connected`.
+
+### C.4 Lab 3 — governance in a privileged tenant
+
+1. Open **Management groups** and create the intermediate root, Platform,
+   Landing Zones, Sandbox and Decommissioned hierarchy; add Management,
+   Connectivity, Identity, Corp and Online children.
+2. Move subscriptions only with approved ownership and change control. Place
+   internal workloads under Corp and public-ingress workloads under Online.
+3. Open **Policy → Definitions/Initiatives**. Start allowed-region, required-tag,
+   diagnostics, private-endpoint and workload-public-IP controls in Audit.
+4. Review compliance, remediate existing resources, approve time-bound
+   exemptions, then promote tested preventative controls to Deny/Modify.
+5. Assign Entra groups—not individual users—to Platform, Network, Security and
+   workload scopes. Use PIM for privileged roles and document break-glass access.
+6. The restricted training sandbox normally cannot perform these steps. Record
+   authorization failure as evidence; ARM/Bicep/Terraform cannot bypass RBAC.
+
+## Appendix D — expected outputs and evidence checklist
+
+```bash
+terraform output -raw resource_group_name
+terraform output -raw lab1_public_dns_url
+terraform output -raw lab4_waf_url
+terraform output -json web_vm_private_ip
+terraform output -json lab4_private_dns
+./validate-deployment.sh
+```
+
+Expected evidence:
+
+- Seven VMs running; zonal web/frontend/API pairs show zones 1 and 2.
+- Both Hub/Online and Hub/Corp peerings Connected/FullyInSync.
+- Lab 1 and Lab 2 normal requests HTTP 200.
+- Lab 2 `/api/health` reports API metadata and database `connected`.
+- WAF custom-header and OWASP SQL-injection tests HTTP 403.
+- Application Gateway `.11` and `.12` backends Healthy.
+- Application VMs and SQL have no direct public endpoint.
+- Effective default routes point to Firewall `10.1.0.4`.
+- Firewall and WAF diagnostic records arrive in Log Analytics.
+- Final `terraform plan -detailed-exitcode` returns 0.
+
+## Appendix E — recovery decision tree and generated files
+
+```text
+Apply failed
+├── State lock held and Terraform process running -> wait; never force-unlock
+├── ReferencedResourceNotProvisioned on peering -> create a fresh plan using current serialized dependencies
+├── Extension exists in Azure but not state -> delete only failed extension or import it; then fresh recovery plan
+├── Extension cannot reach Ubuntu -> verify both peerings Connected and UDR/Firewall rule
+├── WAF 502 -> inspect gateway backend health and Nginx /health
+└── Plan proposes unexpected replacement/destroy -> stop and verify account, backend, variables and state
+```
+
+| Generated file | Commit? | Lifecycle |
+|---|---|---|
+| `terraform.tfvars` | No | Regenerate for each sandbox |
+| `backend.hcl` | No | Backend coordinates for current sandbox/account |
+| `.backend.env` | Never | Secret Storage Account access key |
+| `*.tfplan` | No | Disposable; never reuse after any change/failure |
+| `.terraform/` | No | Provider/backend cache; recreated by `terraform init` |
+| Remote state blob | Never | Preserve until Terraform destroy completes |
+
+The repository may retain historical filenames containing `lab4` or section
+paths containing `04`/`09`. They are compatibility identifiers, not the current
+learner sequence.

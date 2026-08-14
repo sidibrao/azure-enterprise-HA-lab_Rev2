@@ -1,391 +1,182 @@
 # Azure Enterprise HA Landing Zone — Rev2
 
-Start with the complete [Low-Level Design and Fresh-Sandbox Deployment Guide](docs/LLD-FRESH-SANDBOX-DEPLOYMENT-GUIDE.md). It covers Lab 0 remote-state bootstrap, Portal-first learning, Terraform deployment, DNS, WAF, SQL interaction, HA testing, troubleshooting and cleanup.
+Rev2 is a hands-on, cost-conscious Azure landing-zone lab with a shared hub,
+central Azure Firewall, Corp and Online spokes, zonal compute, private DNS,
+Application Gateway WAF_v2, and Azure SQL through a private endpoint.
 
-> **Status:** Labs 1 and 4 are implemented and Azure-validated. Lab 9 governance
-> remains capability-gated by tenant and management-group permissions.
+Start with the [Low-Level Design and Fresh-Sandbox Deployment Guide](docs/LLD-FRESH-SANDBOX-DEPLOYMENT-GUIDE.md).
+It contains the complete Portal-first build, Terraform workflow, testing,
+troubleshooting, cleanup, CAF/ALZ design, policy guidance, and appendices.
 
-## What Rev2 contains today
+> **Validated status:** Labs 0, 1, and 2 have been deployed and functionally
+> validated in Azure. Lab 3 governance remains capability-gated by the training
+> tenant's management-group, Policy, RBAC, and Entra permissions.
 
-The distinction below is important: an architecture diagram is not proof that
-Terraform for that component exists.
+## Sequential curriculum
 
-| Component | Terraform status | Azure status |
-|---|---|---|
-| Hub, firewall, Corp spoke and ERP VM | Implemented | Azure validated |
-| Rev2 Section 1 — ALZ hierarchy | Design/code reference only | Not deployed |
-| Rev2 Section 1 — two zonal web VMs and internal LB | Implemented | Azure validated, including failover |
-| Rev2 Section 1 — public/private DNS | Implemented | Azure validated |
-| Rev2 Section 4 — Online spoke, WAF_v2, four zonal VMs, private SQL and DNS | Implemented | Azure validated, including WAF, data and failover tests |
-| Rev2 Section 4 — DDoS IP Protection | Capability-gated plan | Not deployed |
-| Rev2 Section 9 — policy/RBAC guardrails | Partial reference in `policy.tf.disabled` | Not deployed due to sandbox permissions |
-| Rev2 Section 9 — GitHub drift workflow | Planned | Not configured |
-
-Running Terraform from the repository root deploys the Corp and Online landing
-zone lab resources. See [Lab 4 runbook](docs/LAB4-WAF-ONLINE-RUNBOOK.md) for the
-application, DNS, portal, Terraform and validation workflows.
-
-## Rev2 curriculum sections
-
-| Section | Name | Primary outcome | Details |
+| Lab | Name | Outcome | Status |
 |---|---|---|---|
-| Rev2 Section 1 | ALZ and Multi-Zone HA Foundation | Landing-zone model plus two zonal web VMs behind an internal Standard Load Balancer | [Section 1](sections/rev2-section-01-alz-ha/README.md) |
-| Rev2 Section 4 | WAF and DDoS Secure Ingress | Application Gateway WAF_v2, OWASP/custom rules, secure private backends | [Section 4](sections/rev2-section-04-waf-ddos/README.md) |
-| Rev2 Section 9 | Governance and Drift Control | Policy initiative, group-based RBAC, exemptions, diagnostics and drift detection | [Section 9](sections/rev2-section-09-governance-drift/README.md) |
+| Lab 0 | Bootstrap and prerequisites | Azure CLI authentication, sandbox discovery, remote state, validation | Implemented and validated |
+| Lab 1 | Corp ALZ and multi-zone HA | Hub/Corp spoke, Firewall, UDR, two zonal web VMs, internal LB, DNS | Implemented and validated |
+| Lab 2 | Online WAF and private data | Online spoke, WAF_v2, two frontend VMs, two API VMs, API LB, private SQL | Implemented and validated |
+| Lab 3 | Governance and drift control | Management-group policy, RBAC, exemptions, remediation, CI drift | Design/reference; sandbox gated |
 
-The cross-section status dashboard is in
-[IMPLEMENTATION-STATUS.md](docs/IMPLEMENTATION-STATUS.md).
+The original source requirements called the Online lab “Lab 4” and governance
+“Lab 9.” Rev2 presents them sequentially as Labs 2 and 3. Existing Terraform
+identifiers such as `lab4_*` and filenames such as `lab4-network.tf` remain for
+state compatibility; renaming resource addresses would require state moves and
+would add risk without changing Azure architecture.
 
-Terraform lab implementing a restricted-sandbox version of an Azure Corp
-application landing zone. It demonstrates centralized egress inspection, private
-workload VMs, hub-and-spoke routing, Azure Firewall DNAT, and centralized logs.
-
-The active sandbox design deploys into one pre-created resource group because the
-training identity cannot create resource groups or subscription-level policies.
-The network and security behavior remains representative of an enterprise landing
-zone.
-
-## Rev2 target architecture
+## Architecture
 
 [![Rev2 high-availability Azure architecture](docs/diagrams/architecture-rev2.svg)](docs/diagrams/architecture-rev2.svg)
 
-Edit the source at [excalidraw.com](https://excalidraw.com):
+Editable source:
 [architecture-rev2.excalidraw](docs/diagrams/architecture-rev2.excalidraw).
 
-The current Rev1 deployment diagram remains available for baseline comparison:
-[Rev1 SVG](docs/diagrams/architecture-rev1.svg) and
-[Rev1 Excalidraw source](docs/diagrams/architecture-rev1.excalidraw).
-
-See [REV2-IMPLEMENTATION-PLAN.md](docs/REV2-IMPLEMENTATION-PLAN.md) for the
-staged architecture decisions, sandbox capability gates, address plan, and test
-matrix.
-
-## Current Rev1 baseline architecture
-
-[![Rev1 Azure architecture](docs/diagrams/architecture-rev1.svg)](docs/diagrams/architecture-rev1.svg)
-
-The source is editable in [Excalidraw](https://excalidraw.com):
-[architecture-rev1.excalidraw](docs/diagrams/architecture-rev1.excalidraw).
-The checked-in generator keeps the editable source and rendered SVG aligned.
-
-### Traffic flows
-
-Outbound ERP or web traffic:
-
 ```text
-Private VM
-  -> subnet UDR (0.0.0.0/0)
-  -> VNet peering
-  -> Azure Firewall 10.1.0.4
-  -> application-rule evaluation
-  -> allowed Ubuntu repository or deny
+Internet
+├── Lab 1 DNS -> Azure Firewall public IP:80
+│   -> DNAT -> Corp ILB 10.2.2.20
+│      -> web zone 1 10.2.2.11 / web zone 2 10.2.2.12
+└── Lab 2 DNS -> Application Gateway WAF_v2 (zones 1 and 2)
+    -> frontend zone 1 10.3.1.11 / frontend zone 2 10.3.1.12
+    -> API ILB 10.3.2.20:8000
+       -> API zone 1 10.3.2.11 / API zone 2 10.3.2.12
+       -> Azure SQL private endpoint in 10.3.3.0/24
+
+Corp/Online outbound -> UDR 0.0.0.0/0 -> Azure Firewall 10.1.0.4
+Diagnostics -> central Log Analytics workspace
 ```
 
-Inbound web traffic:
+## Current implementation status
 
-```text
-Internet client
-  -> Azure Firewall public IP:80
-  -> DNAT rule
-  -> 10.2.2.10:80 across hub-to-spoke peering
-  -> web subnet NSG
-  -> private Nginx VM
-  -> return route through Azure Firewall
-```
-
-Neither VM has a public IP. The firewall is the only public application entry
-point.
-
-## IP address plan
-
-| Component | Address range or IP | Purpose |
+| Component | Terraform | Azure validation |
 |---|---|---|
-| Hub VNet | `10.1.0.0/16` | Shared network and security services |
-| Azure Firewall subnet | `10.1.0.0/26` | Firewall data-plane interface |
-| Azure Firewall | `10.1.0.4` | Spoke UDR next hop |
-| Firewall management subnet | `10.1.1.0/26` | Required by Azure Firewall Basic |
-| ERP spoke VNet | `10.2.0.0/16` | Internal workload landing zone |
-| ERP application subnet | `10.2.1.0/24` | Private ERP workload |
-| ERP test VM | `10.2.1.10` | Outbound routing validation |
-| Web subnet | `10.2.2.0/24` | Private web workload |
-| Nginx web VM | `10.2.2.10` | DNAT backend on TCP 80 |
-| Default route | `0.0.0.0/0 -> 10.1.0.4` | Forces spoke egress through firewall |
+| Remote Blob state and lease locking | Implemented | Validated |
+| Hub, Firewall Basic and central diagnostics | Implemented | Validated |
+| Corp and Online spokes with bidirectional peerings | Implemented | Connected/FullyInSync |
+| Lab 1 zonal web pair and internal LB | Implemented | HTTP and failover validated |
+| Lab 1 Firewall DNAT and DNS | Implemented | HTTP 200 validated |
+| Lab 2 WAF_v2 and managed/custom rules | Implemented | Normal 200; malicious tests 403 |
+| Lab 2 zonal frontend and API pairs | Implemented | Both gateway backends healthy |
+| Azure SQL Basic private endpoint/DNS | Implemented | API reports database connected |
+| Management groups and inherited Policy | Reference only | Blocked by sandbox scope |
+| DDoS paid protection | Design only | Not deployed for lab cost |
 
-The firewall public IP is assigned by Azure and returned by `terraform output`.
+See [Implementation Status](docs/IMPLEMENTATION-STATUS.md) for the evidence
+matrix and [Lab 2 Runbook](docs/LAB4-WAF-ONLINE-RUNBOOK.md) for application and
+WAF tests.
 
-## Resources deployed
+## Repository map
 
-- Existing sandbox resource group, read through a Terraform data source.
-- Hub and ERP spoke virtual networks.
-- Three workload/platform subnets plus the firewall management subnet.
-- Bidirectional VNet peering with forwarded traffic enabled.
-- Azure Firewall Basic and two Standard public IPs.
-- Firewall Policy with:
-  - Ubuntu repository HTTP/80 and HTTPS/443 egress.
-  - HTTP/80 DNAT to the private web VM.
-- Route table associated with both workload subnets.
-- ERP and web network security groups.
-- Private Ubuntu ERP test VM at `10.2.1.10`.
-- Private Ubuntu/Nginx web VM at `10.2.2.10`.
-- Log Analytics workspace and Azure Firewall diagnostics.
-
-## Repository layout
-
-| File | Purpose |
+| Path | Purpose |
 |---|---|
-| `versions.tf` | Terraform and provider versions; Azure provider configuration |
-| `variables.tf` | Subscription, tenant, sandbox, naming, and deployment inputs |
-| `locals.tf` | Common tags and sandbox policy status |
-| `main.tf` | Hub/spoke, firewall, routing, logging, and ERP VM |
-| `web-vm.tf` | Private web VM, Nginx cloud-init, NSG, subnet, and DNAT |
-| `outputs.tf` | Firewall, VM, workspace, and web URL outputs |
-| `policy.tf.disabled` | Enterprise policy reference excluded from sandbox deployment |
-| `tests/lab1.tftest.hcl` | Offline architecture contract tests |
-| `configure-sandbox.sh` | Discovers fresh sandbox IDs from Azure CLI |
-| `TOMORROW.md` | Short rebuild procedure for a replacement sandbox |
+| `versions.tf` | Terraform/provider requirements and Azure backend declaration |
+| `variables.tf` | Subscription, tenant, resource group, SKU and feature inputs |
+| `main.tf` | Hub, Corp spoke, Firewall, egress, logging and ERP VM |
+| `web-vm.tf`, `web-content.tf` | Lab 1 zonal web tier, ILB, DNAT and pages |
+| `dns.tf` | Lab 1 public/private DNS |
+| `lab4-network.tf` | Lab 2 Online network, NSGs, UDR and serialized peerings |
+| `lab4-compute.tf` | Lab 2 zonal frontend/API VMs and resilient extensions |
+| `lab4-database.tf` | SQL Basic, private endpoint and private DNS |
+| `lab4-waf.tf`, `lab4-dns.tf` | WAF_v2 ingress, rules, diagnostics and DNS |
+| `outputs.tf`, `lab4-outputs.tf` | Deployment URLs, IPs, DNS and identifiers |
+| `templates/` | Nginx, API and repeatable guest configuration templates |
+| `tests/` | Offline Terraform architecture contract tests |
+| `bootstrap-state-backend.sh` | Creates/reuses private Azure Blob state backend |
+| `configure-sandbox.sh` | Generates ignored sandbox-specific variables |
+| `validate-deployment.sh` | Non-destructive end-to-end live validation |
+| `policy.tf.disabled` | Enterprise governance reference excluded in restricted sandbox |
 
-Terraform automatically loads every top-level file ending in `.tf`. There is no
-need to run `main.tf` and `web-vm.tf` separately.
+Terraform loads all top-level `.tf` files as one configuration. Never execute a
+`.tf` or `.tftpl` file directly.
 
-## Prerequisites
+## Fast deployment
 
-- Ubuntu, macOS, Windows, or WSL terminal.
-- Terraform 1.6 or later.
-- Azure CLI.
-- A sandbox account with Contributor access to a pre-created resource group.
-- Registered Azure providers for Network, Compute, Operational Insights, and
-  Policy Insights.
-
-Install Azure CLI on Ubuntu:
-
-```bash
-curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
-az version
-```
-
-## Deploy into a fresh sandbox
-
-### 1. Authenticate
+Use the detailed guide for a first deployment. The abbreviated workflow is:
 
 ```bash
+cd "/home/sadmin/tech projects/Azure Projects/02-azure-enterprise-lab/azure-enterprise-lab_Rev2-HA-ALZ"
+
 az logout
 az account clear
-az login --use-device-code
-az account show -o table
-az group list -o table
-```
+az login --tenant <tenant-id> --use-device-code
+az account set --subscription <subscription-id>
 
-Select `P4-Real Hands-On Labs` during login. Credentials are stored by Azure CLI,
-not in Terraform.
-
-### 2. Configure the new sandbox
-
-```bash
-chmod +x configure-sandbox.sh
 ./configure-sandbox.sh
-```
+./bootstrap-state-backend.sh
+source .backend.env
 
-The script discovers the active subscription ID, tenant ID, playground resource
-group, and location. It writes ignored `terraform.tfvars` without storing a
-username, password, application secret, or client secret.
-
-For a sandbox with a nonstandard resource-group name, copy and edit the example:
-
-```bash
-cp terraform.tfvars.example terraform.tfvars
-```
-
-### 3. Initialize and validate
-
-```bash
-terraform init
+terraform init -reconfigure -backend-config=backend.hcl
 terraform fmt -check -recursive
 terraform validate
 terraform test
+terraform plan -out=fresh-sandbox.tfplan
+terraform show -no-color fresh-sandbox.tfplan | less
+terraform apply fresh-sandbox.tfplan
+./validate-deployment.sh
+terraform plan -detailed-exitcode
 ```
 
-Expected test result:
+Expected final validation includes HTTP 200 for Labs 1/2, SQL connected, both
+WAF tests returning 403, healthy Application Gateway backends, and a no-drift
+Terraform plan.
 
-```text
-Success! 1 passed, 0 failed.
-```
+## Deployment options
 
-### 4. Plan and apply
-
-```bash
-terraform plan -out=lab1.tfplan
-terraform apply lab1.tfplan
-```
-
-Azure Firewall commonly takes 8–12 minutes. The web VM waits for the firewall
-egress rule so cloud-init can download Nginx over HTTP/80.
-
-### 5. Display deployment details
-
-```bash
-terraform output
-```
-
-Expected private addresses:
-
-```text
-firewall_private_ip = 10.1.0.4
-test_vm_private_ip  = 10.2.1.10
-web_vm_private_ip   = 10.2.2.10
-web_url             = http://<firewall-public-ip>
-```
-
-Private SSH-key outputs are sensitive and should not be printed, copied, or
-committed unless specifically required for recovery.
+| Option | Command | Use |
+|---|---|---|
+| Interactive | `terraform apply` | Quick disposable learning; review generated plan and type `yes` |
+| Saved plan | `terraform plan -out=deploy.tfplan` then `terraform apply deploy.tfplan` | Recommended; applies exactly the reviewed plan |
+| Recovery | New plan after correcting state/resource failure | Only for a diagnosed partial apply; never reuse the failed plan |
+| Destroy | `terraform plan -destroy -out=destroy.tfplan` then apply it | Controlled cleanup before sandbox expiry |
 
 ## Validation
 
-### Confirm Terraform has no drift
+```bash
+./validate-deployment.sh
+```
+
+The script checks VM power, both public sites, API/SQL health, custom WAF and
+OWASP blocking, and Application Gateway backend health. It automatically loads
+the ignored backend environment file.
+
+Manual outputs:
 
 ```bash
-terraform plan
+terraform output -raw lab1_public_dns_url
+terraform output -raw lab4_waf_url
+terraform output -json lab4_private_dns
 ```
 
-Expected: `No changes`.
+Avoid `terraform output -json` without an output name because the state also
+contains sensitive generated credentials and private keys.
 
-### Confirm firewall and peering
+## State, secrets and cleanup
+
+Never commit sandbox credentials, `.backend.env`, `terraform.tfvars`, state,
+plans, SQL passwords, or private keys. The Azure Blob backend supplies encrypted
+storage and blob-lease locking. It is created outside the workload state so that
+Terraform can safely destroy the workload without deleting its own backend.
 
 ```bash
-az network firewall show \
-  --resource-group "$(az group list --query "[?contains(name, 'playground-sandbox')].name | [0]" -o tsv)" \
-  --name afw-contoso-lab1-hub \
-  --query '{State:provisioningState,PrivateIP:ipConfigurations[0].privateIPAddress,Tier:sku.tier}' \
-  --output table
-```
-
-Expected firewall status: `Succeeded`, IP `10.1.0.4`, tier `Basic`.
-
-### Confirm the active default route
-
-```bash
-SANDBOX_RG=$(az group list --query "[?contains(name, 'playground-sandbox')].name | [0]" -o tsv)
-
-az network nic show-effective-route-table \
-  --resource-group "$SANDBOX_RG" \
-  --name nic-contoso-lab1-erp-test \
-  --output table
-```
-
-Verify the active user route sends `0.0.0.0/0` to virtual appliance `10.1.0.4`.
-
-### Test allowed and denied ERP egress
-
-```bash
-az vm run-command invoke \
-  --resource-group "$SANDBOX_RG" \
-  --name vm-contoso-lab1-erp-test \
-  --command-id RunShellScript \
-  --scripts "curl -sSI --max-time 20 https://packages.ubuntu.com | head -n 1" \
-  --query 'value[0].message' -o tsv
-```
-
-Expected: HTTP 200.
-
-```bash
-az vm run-command invoke \
-  --resource-group "$SANDBOX_RG" \
-  --name vm-contoso-lab1-erp-test \
-  --command-id RunShellScript \
-  --scripts "if curl -sSI --max-time 15 https://example.com >/dev/null; then echo UNEXPECTEDLY_ALLOWED; else echo BLOCKED_AS_EXPECTED; fi" \
-  --query 'value[0].message' -o tsv
-```
-
-Expected: `BLOCKED_AS_EXPECTED`.
-
-### Test the web service
-
-```bash
-curl -i --connect-timeout 15 "$(terraform output -raw web_url)"
-```
-
-Expected: `HTTP/1.1 200 OK` and the Contoso page.
-
-The lab publishes HTTP only. HTTPS requires a certificate and an HTTPS-capable
-ingress design such as Application Gateway WAF or Azure Front Door.
-
-## Firewall logs
-
-Open the deployed Log Analytics workspace and run:
-
-```kusto
-AZFWApplicationRule
-| where TimeGenerated > ago(30m)
-| project TimeGenerated, SourceIp, Fqdn, Action, Protocol
-| order by TimeGenerated desc
-```
-
-For legacy diagnostic tables:
-
-```kusto
-AzureDiagnostics
-| where ResourceType == "AZUREFIREWALLS"
-| where TimeGenerated > ago(30m)
-| order by TimeGenerated desc
-```
-
-## Troubleshooting learned during the build
-
-### Nginx is not installed
-
-Ubuntu Azure images use `http://azure.archive.ubuntu.com`. The firewall must
-allow both HTTP/80 and HTTPS/443 to `*.ubuntu.com`. This is now encoded in
-Terraform.
-
-### APT lock is held
-
-Cloud-init or automatic updates can temporarily hold `/var/lib/apt/lists/lock`.
-Wait for the package process; do not delete lock files or immediately kill APT.
-
-### Portal Run Command list is unavailable
-
-Restricted sandboxes may prevent the Portal from listing commands while Azure CLI
-Run Command remains available. Use `az vm run-command invoke`.
-
-### Terraform proposes removing a Portal change
-
-Do not apply. Encode the manual change in Terraform first, then rerun `terraform
-plan` until configuration and Azure match.
-
-## Governance limitation
-
-`policy.tf.disabled` contains the enterprise `deny-public-ips` policy and optional
-Corp management-group design. The training sandbox cannot create subscription
-policy definitions, policy assignments, management groups, or resource groups.
-
-In an appropriately privileged account, this reference can be restored and
-adapted. Do not simply rename it without also restoring the appropriate policy
-scope in `locals.tf` and reviewing subscription placement.
-
-## State and secrets
-
-The repository intentionally ignores:
-
-```text
-.terraform/
-terraform.tfvars
-*.tfstate
-*.tfstate.*
-*.tfplan
-.state-archive/
-```
-
-Terraform state contains generated SSH private keys. Never commit or publish it.
-A production implementation should use an encrypted Azure Storage backend with
-restricted access and state locking.
-
-## Destroy
-
-Azure Firewall is the largest cost. Destroy the lab after validation:
-
-```bash
+source .backend.env
 terraform plan -destroy -out=destroy.tfplan
 terraform apply destroy.tfplan
+terraform state list            # expected: no output
 ```
 
-Terraform reads but does not manage the shared sandbox resource group, so it
-removes only lab resources and does not delete the resource group itself.
+Do not delete the backend or local backend files until destruction completes.
+
+## Documentation
+
+- [Complete LLD and deployment guide](docs/LLD-FRESH-SANDBOX-DEPLOYMENT-GUIDE.md)
+- [Lab 2 WAF/Online runbook](docs/LAB4-WAF-ONLINE-RUNBOOK.md)
+- [Implementation status](docs/IMPLEMENTATION-STATUS.md)
+- [Rev2 implementation plan](docs/REV2-IMPLEMENTATION-PLAN.md)
+- [Fresh-sandbox quick rebuild](TOMORROW.md)
+
+The appendix of the complete guide contains the legacy-to-sequential naming
+map, Terraform command reference, Portal click-path checklist, expected outputs,
+recovery decision tree, and evidence checklist.

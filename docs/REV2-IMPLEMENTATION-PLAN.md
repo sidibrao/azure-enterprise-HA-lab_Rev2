@@ -7,12 +7,15 @@ combines:
 
 - Lab 1: Azure Landing Zone skeleton.
 - Multi-zone application high availability.
-- Lab 4: WAF and DDoS protection.
-- Lab 9: Governance, RBAC, policy, and drift control.
+- Lab 2: WAF and DDoS protection.
+- Lab 3: Governance, RBAC, policy, and drift control.
 
 Rev1 remains unchanged in its own repository. Rev2 is developed here and released
 in capability-gated stages because training sandboxes commonly restrict tenant,
 subscription, region, SKU, quota, and RBAC operations.
+
+Labs are presented in sequential order 0–3. Legacy `lab4_*` identifiers remain
+state-compatible and do not change the learner-facing Lab 2 name.
 
 ## Architecture decisions
 
@@ -82,13 +85,17 @@ production request path.
 | Azure Firewall subnet | `10.1.0.0/26` |
 | Azure Firewall | `10.1.0.4` |
 | Firewall management subnet | `10.1.1.0/26` |
-| Application Gateway subnet | `10.1.3.0/24` |
-| ERP/Online spoke | `10.2.0.0/16` |
+| Corp/ERP spoke | `10.2.0.0/16` |
 | ERP subnet | `10.2.1.0/24` |
 | Web subnet | `10.2.2.0/24` |
 | Web VM Zone 1 | `10.2.2.11` |
 | Web VM Zone 2 | `10.2.2.12` |
 | Internal Load Balancer | `10.2.2.20` |
+| Online spoke | `10.3.0.0/16` |
+| Application Gateway subnet | `10.3.0.0/24` |
+| Online frontend subnet | `10.3.1.0/24` |
+| Online API subnet / ILB | `10.3.2.0/24` / `10.3.2.20` |
+| SQL private-endpoint subnet | `10.3.3.0/24` |
 | Workload default route | `0.0.0.0/0 -> 10.1.0.4` |
 
 ## Rev2 Section 1 — ALZ and Multi-Zone HA Foundation
@@ -151,7 +158,7 @@ Validation:
 4. Confirm uninterrupted service from Zone 2.
 5. Restart Zone 1 and confirm health recovery.
 
-## Rev2 Section 4 — WAF and DDoS Secure Ingress
+## Rev2 Section 2 — WAF and DDoS Secure Ingress
 
 Build:
 
@@ -176,7 +183,7 @@ curl -i 'http://<waf-ip>/?id=%27%20OR%201=1--'
 Confirm allowed traffic, blocked test traffic, WAF logs, and absence of direct
 backend public access.
 
-## Rev2 Section 9 — Governance and Drift Control
+## Rev2 Section 3 — Governance and Drift Control
 
 Policy initiative:
 
@@ -232,10 +239,14 @@ modules/
 └── rbac/
 
 labs/
-├── lab-01-alz-skeleton/
-├── lab-04-waf-ddos/
-└── lab-09-governance-drift/
+├── lab-00-bootstrap/
+├── lab-01-corp-alz-ha/
+├── lab-02-online-waf-private-data/
+└── lab-03-governance-drift/
 ```
+
+This is the learner-facing target structure. Existing root filenames and state
+addresses remain until a separately reviewed state-migration release.
 
 ## Fresh sandbox sequence
 

@@ -7,8 +7,11 @@ health-probed, multi-zone web tier behind an Internal Standard Load Balancer.
 
 ## Current status
 
-**Planned.** The root Terraform still deploys one web VM at `10.2.2.10`; it does
-not yet deploy the resources in this section.
+**Workload implementation Azure validated.** The root Terraform deploys two
+private web VMs at `10.2.2.11` and `10.2.2.12`, an internal Standard Load
+Balancer at `10.2.2.20`, Firewall DNAT, private/public DNS and central
+diagnostics. Tenant-level management groups, inherited Policy, Entra groups and
+PIM remain capability-gated in the restricted sandbox.
 
 ## Architecture scope
 
@@ -47,10 +50,8 @@ Azure Firewall `10.1.0.4`.
 
 ## Terraform deliverables
 
-- `modules/alz-hierarchy`
-- `modules/zonal-web-tier`
-- `modules/internal-load-balancer`
-- Feature flags for full tenant and restricted sandbox modes.
+- Flat root resources for the sandbox workload implementation.
+- `policy.tf.disabled` as an explicitly undeployed tenant-governance reference.
 - Two explicit zonal VM resources or a flexible VM scale set with zone spread.
 - Backend pool NIC associations.
 - Internal Standard Load Balancer frontend `10.2.2.20`.
@@ -65,8 +66,8 @@ Azure Firewall `10.1.0.4`.
 
 | Resource | Planned name/value |
 |---|---|
-| Web VM Zone 1 | `vm-contoso-lab1-web-z1`, `10.2.2.11` |
-| Web VM Zone 2 | `vm-contoso-lab1-web-z2`, `10.2.2.12` |
+| Web VM Zone 1 | `vm-contoso-lab1-web-zone1`, `10.2.2.11` |
+| Web VM Zone 2 | `vm-contoso-lab1-web-zone2`, `10.2.2.12` |
 | Load Balancer | `lbi-contoso-lab1-web` |
 | ILB frontend | `10.2.2.20` |
 | Backend pool | `bepool-web` |
@@ -76,22 +77,19 @@ Azure Firewall `10.1.0.4`.
 
 ## Terraform outputs
 
-Planned output contract:
+Implemented output contract includes:
 
 ```hcl
-output "selected_region" {}
-output "availability_zones" {}
-output "web_vm_zone_1_private_ip" {}
-output "web_vm_zone_2_private_ip" {}
-output "web_vm_zone_1_id" {}
-output "web_vm_zone_2_id" {}
+output "resource_group_name" {}
+output "web_vm_zones" {}
+output "web_vm_private_ip" {}
 output "internal_load_balancer_ip" {}
 output "load_balancer_backend_pool_id" {}
 output "load_balancer_probe_id" {}
-output "firewall_public_ip" {}
 output "ha_test_url" {}
-output "alz_deployment_mode" {}
-output "management_group_ids" {}
+output "lab1_public_dns_url" {}
+output "lab1_private_dns" {}
+output "policy_assignment_scope" {}
 ```
 
 ## Validation output

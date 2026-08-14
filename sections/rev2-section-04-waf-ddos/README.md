@@ -1,7 +1,11 @@
-# Rev2 Section 4 — Online Landing Zone, WAF and Private Data
+# Rev2 Section 2 — Online Landing Zone, WAF and Private Data
 
 Status: **implemented and Azure validated**. The detailed build and test guide
-is [LAB4-WAF-ONLINE-RUNBOOK.md](../../docs/LAB4-WAF-ONLINE-RUNBOOK.md).
+is [Lab 2 WAF Online Runbook](../../docs/LAB4-WAF-ONLINE-RUNBOOK.md).
+
+The directory retains `section-04` only as a historical repository path. The
+sequential Rev2 curriculum calls this Lab 2/Section 2, and Terraform retains
+`lab4_*` addresses to avoid state migration.
 
 ```text
 Internet / public Azure DNS

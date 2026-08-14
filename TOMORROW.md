@@ -1,8 +1,8 @@
 # Rebuild in a Fresh Sandbox
 
 The sandbox deletes Azure resources, but the Terraform configuration remains in
-this local folder. Do not reuse the old `terraform.tfstate` with a different
-sandbox. Archive it before initializing the fresh environment.
+this local folder. Each replacement sandbox needs new Azure CLI authentication,
+variables and normally a new disposable Blob backend/state key.
 
 ## 1. Log in with the new sandbox account
 
@@ -13,12 +13,13 @@ az login --use-device-code
 az account show -o table
 ```
 
-Select the new `P4-Real Hands-On Labs` subscription during login.
+Select the newly assigned Hands-On Labs subscription during login and verify its
+ID; never assume yesterday's `P4`, `P5`, or `P6` subscription.
 
-## 2. Archive the expired sandbox state
+## 2. Separate the expired sandbox state
 
-Only do this after confirming the previous sandbox has expired and its resources
-are gone:
+Local state is used only by older revisions. If it exists, archive it after
+confirming the previous resources are gone:
 
 ```bash
 timestamp=$(date +%Y%m%d-%H%M%S)
@@ -27,6 +28,8 @@ mv terraform.tfstate* ".state-archive/${timestamp}/" 2>/dev/null || true
 ```
 
 `.state-archive/` is ignored by Git because state files can contain SSH keys.
+Do not point a new sandbox at a remote state that still owns live resources in a
+different subscription.
 
 ## 3. Discover the new Azure IDs
 
@@ -42,23 +45,30 @@ It never stores the username, password, application secret, or client secret.
 ## 4. Validate and deploy
 
 ```bash
-terraform init
+chmod +x bootstrap-state-backend.sh
+./bootstrap-state-backend.sh
+source .backend.env
+terraform init -reconfigure -backend-config=backend.hcl
 terraform fmt -check -recursive
 terraform validate
 terraform test
-terraform plan -out=lab1.tfplan
-terraform apply lab1.tfplan
+terraform plan -out=fresh-sandbox.tfplan
+terraform show -no-color fresh-sandbox.tfplan | less
+terraform apply fresh-sandbox.tfplan
 ```
 
-Azure Firewall takes roughly 8–12 minutes. The web VM waits for the HTTP/80 and
-HTTPS/443 Ubuntu egress rules before cloud-init installs Nginx.
+Azure Firewall and Application Gateway are the slowest resources. Lab 2 guest
+extensions run only after both Hub/Online peerings exist and verify Nginx,
+API/private DNS and SQL health before Terraform succeeds.
 
 ## 5. Verify
 
 ```bash
-terraform output
-curl -i --connect-timeout 15 "$(terraform output -raw web_url)"
-terraform plan
+./validate-deployment.sh
+terraform output -raw lab1_public_dns_url
+terraform output -raw lab4_waf_url
+terraform plan -detailed-exitcode
 ```
 
-Expected: HTTP 200 and a final Terraform plan reporting no changes.
+Expected: both sites HTTP 200, SQL connected, WAF tests 403, healthy gateway
+backends, and detailed exit code 0.

@@ -1,4 +1,4 @@
-# Lab 4 WAF Online Landing Zone Runbook
+# Lab 2 WAF Online Landing Zone Runbook
 
 ## Deployed design
 
@@ -30,7 +30,7 @@ frontend calls across the API tier.
 | Private | `firewall.hub.contoso.internal` | `10.1.0.4` |
 | Private | `web.corp.contoso.internal` | `10.2.2.20` |
 | Private | `web-zone1/2.corp.contoso.internal` | `10.2.2.11/12` |
-| Public | `terraform output -raw lab4_waf_public_fqdn` | Lab 4 WAF public IP |
+| Public | `terraform output -raw lab4_waf_public_fqdn` | Lab 2 WAF public IP |
 | Private | `frontend.online.contoso.internal` | `10.3.1.11`, `10.3.1.12` |
 | Private | `fe-zone1/2.online.contoso.internal` | `10.3.1.11/12` |
 | Private | `api.online.contoso.internal` | `10.3.2.20` |
@@ -105,7 +105,9 @@ Update `terraform.tfvars`, then:
 az login --use-device-code
 az account set --subscription <new-subscription-id>
 ./configure-sandbox.sh <subscription-id> <tenant-id> <resource-group> <location>
-terraform init -upgrade
+./bootstrap-state-backend.sh
+source .backend.env
+terraform init -reconfigure -backend-config=backend.hcl -upgrade
 terraform fmt -check -recursive
 terraform validate
 terraform test
@@ -119,12 +121,12 @@ Always inspect the plan for unexpected destroys or replacements.
 
 Terraform loads every `.tf` file in this directory as one configuration. Run
 the commands from the repository root; do not execute `main.tf`,
-`lab4-network.tf`, or a template independently. The Lab 4 dependency chain is
+`lab4-network.tf`, or a template independently. The Lab 2 dependency chain is
 deliberately serialized:
 
 ```text
 Online subnets -> Online-to-Hub peering -> Hub-to-Online peering
-  -> Lab 4 VMs -> guest extensions -> Nginx/API/SQL health checks
+  -> Lab 2 VMs -> guest extensions -> Nginx/API/SQL health checks
 ```
 
 This prevents Azure subnet updates from racing with peering creation and
