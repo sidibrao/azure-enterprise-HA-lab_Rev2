@@ -65,6 +65,88 @@ Tenant
 In production, Platform, Corp and Online normally use separate subscriptions
 under management groups with inherited Policy and group-based RBAC.
 
+### 2.1 CAF and Azure landing zone relationship
+
+The Microsoft Cloud Adoption Framework (CAF) is the operating guidance: it
+covers strategy, planning, readiness, adoption, governance, security, management
+and continuous improvement. An Azure landing zone (ALZ) is the Azure environment
+that implements the **Ready** foundation. This lab is therefore an ALZ learning
+implementation informed by CAF; it is not the full Microsoft ALZ platform
+deployment.
+
+The design records a decision for each of the eight ALZ design areas:
+
+| ALZ design area | Lab implementation | Enterprise target |
+|---|---|---|
+| Billing and tenant | Provider is pinned to the active sandbox tenant/subscription | Enterprise Agreement or MCA ownership, quotas and subscription vending |
+| Identity and access | Interactive Azure CLI user; resource-group permission | Entra groups, workload managed identities, PIM and break-glass controls |
+| Resource organization | One assigned resource group with Platform/Corp/Online modeled by resources and tags | Management groups and separate platform/application subscriptions |
+| Network topology | Hub-spoke, forced egress, private workloads and private DNS | Connectivity subscription, hybrid connectivity and centralized DNS services |
+| Security | Firewall, WAF, NSGs, private endpoints and no VM public IPs | Defender for Cloud, DDoS decision, security baseline and central SecOps |
+| Management | Log Analytics plus Firewall/Application Gateway diagnostics | Central management subscription, alerts, automation and recovery baseline |
+| Governance | Standard tags; policy code retained but disabled | Initiatives inherited from management groups, exemptions and remediation |
+| Platform automation and DevOps | Terraform, tests, remote state and Git | Federated CI/CD identity, reviews, approvals, drift detection and module registry |
+
+The Cloud Adoption Framework governs the **platform**; the Azure
+Well-Architected Framework should be used separately to assess the reliability,
+security, cost, operational excellence and performance of each workload.
+
+### 2.2 Production target hierarchy
+
+The target hierarchy is based on workload archetypes, not on Azure regions or
+development stages. Availability zones remain a workload architecture choice
+inside the appropriate subscription.
+
+```text
+Tenant root management group
+└── Contoso (intermediate root)
+    ├── Platform
+    │   ├── Management       -> logging, monitoring, automation subscription
+    │   ├── Connectivity     -> hub, Firewall, DNS, VPN/ExpressRoute subscription
+    │   └── Identity         -> identity services subscription when required
+    ├── Landing Zones
+    │   ├── Corp             -> sub-erp-prod; private/hybrid workloads (Lab 1)
+    │   └── Online           -> sub-portal-prod; internet-facing workloads (Lab 4)
+    ├── Sandbox              -> isolated experimentation subscriptions
+    └── Decommissioned       -> disabled/cancelled subscriptions pending removal
+```
+
+Recommended ownership boundaries:
+
+| Scope | Owner | Typical controls |
+|---|---|---|
+| Intermediate root / Platform | Platform team | Baseline policy, allowed regions, platform RBAC |
+| Connectivity | Network team | Hub, routing, DNS, Firewall and route-table changes |
+| Landing Zones | Governance/Security | Workload-agnostic security and diagnostics initiative |
+| Corp | Platform/Security | Private connectivity and deny workload public IPs |
+| Online | Platform/Security | Approved public ingress through WAF; private backends |
+| Workload subscription/RG | Application team | Contributor rights to its workload, not parent policies |
+
+Assign roles to Entra groups at the lowest useful scope. For example, workload
+teams receive Contributor in their application subscription or resource group,
+while policy is assigned at a parent management group. This lets teams operate
+their application without granting permission to change inherited guardrails.
+
+### 2.3 What this sandbox can and cannot prove
+
+The lab proves workload architecture: hub-spoke routing, private endpoints,
+private DNS, zone-aware compute, load balancing, WAF enforcement and central
+diagnostics. It can also demonstrate a resource-group policy if the sandbox
+role permits `Microsoft.Authorization/policyAssignments/write`.
+
+It does **not** prove subscription vending, management-group inheritance, PIM or
+cross-subscription separation when the training identity has access only to the
+assigned resource group. Resource groups are not substitutes for management
+groups. Capture these limitations in the lab evidence instead of weakening the
+target design.
+
+Microsoft references:
+
+- [What is an Azure landing zone?](https://learn.microsoft.com/azure/cloud-adoption-framework/ready/landing-zone/)
+- [ALZ design principles](https://learn.microsoft.com/azure/cloud-adoption-framework/ready/landing-zone/design-principles)
+- [Management group design](https://learn.microsoft.com/azure/cloud-adoption-framework/ready/landing-zone/design-area/resource-org-management-groups)
+- [Platform landing zone implementation options](https://learn.microsoft.com/azure/cloud-adoption-framework/ready/landing-zone/terraform-module)
+
 ## 3. Detailed architecture
 
 ```text
@@ -419,6 +501,149 @@ LAB4_URL=$(terraform output -raw lab4_waf_url)
 echo "$LAB1_URL"
 echo "$LAB4_URL"
 ```
+
+## 8A. Add and apply landing-zone policy
+
+### Policy inheritance model
+
+Azure Policy assignments flow downward through the Azure scope hierarchy:
+
+```text
+Management group assignment
+  -> child management groups
+    -> subscriptions
+      -> resource groups
+        -> resources
+```
+
+Definitions describe a rule, initiatives group related definitions, and
+assignments apply a definition or initiative at a scope. An exemption is a
+reviewed exception; `notScopes` merely excludes a child scope from evaluation.
+For `modify` and `deployIfNotExists`, the assignment also needs a managed
+identity, suitable RBAC, and a remediation task for existing resources. A new
+assignment can take several minutes to evaluate.
+
+### Safe rollout order
+
+1. Define the control objective and owner; prefer Microsoft built-ins where they
+   express the requirement correctly.
+2. Assign in `audit`, `auditIfNotExists`, or non-enforcing mode first.
+3. Review compliance results and false positives across Corp and Online.
+4. Remediate existing resources and document time-bound exemptions.
+5. Change preventive controls to `deny` only after testing them in Sandbox.
+6. Store definitions, initiatives, assignments and exemptions in Terraform;
+   require pull-request review and run scheduled drift plans.
+
+Do not assign a blanket **deny public IP** policy to this entire training
+resource group. The Azure Firewall and Application Gateway are approved ingress
+edges and require public IP resources. In the production hierarchy, assign that
+guardrail to **Corp workload subscriptions** while keeping platform connectivity
+and approved Online ingress at different scopes. If forced to use one resource
+group, use a narrowly tested policy condition or a formal exemption for the edge
+resources; never use an undocumented broad exclusion.
+
+### Portal procedure
+
+1. Open **Policy → Definitions** and review the built-in definition or
+   initiative before assigning it.
+2. Open **Policy → Assignments → Assign policy/initiative**.
+3. Choose the narrowest test scope available. In this sandbox that is the
+   assigned resource group; in the target ALZ choose `Contoso`, `Landing Zones`,
+   `Corp`, or `Online` according to the control matrix below.
+4. Set exclusions only when the design requires them; do not exclude the whole
+   workload subscription.
+5. Configure parameters such as `eastus`, required tag names, or allowed SKUs.
+6. For the first test, use a non-enforcing/audit assignment where supported.
+7. Create the assignment, wait for evaluation, then inspect **Policy →
+   Compliance**.
+8. For `modify`/`deployIfNotExists`, configure the assignment identity and role,
+   then create a remediation task.
+9. Attempt a compliant and a noncompliant deployment and retain both results as
+   evidence.
+
+### Recommended assignment matrix
+
+| Scope | Initial effect | Example controls |
+|---|---|---|
+| Contoso intermediate root | Audit | security baseline visibility; keep root assignments few |
+| Platform | Audit/Deny after validation | required diagnostics, approved regions, platform tags |
+| Landing Zones | Audit then Deny/Modify | allowed regions, required tags, diagnostic baseline |
+| Corp | Deny | NIC public IPs; approved private connectivity and route controls |
+| Online | Audit/Deny with approved edge pattern | private backends; public ingress only through WAF |
+| Sandbox | Audit | cost, regions and security visibility without blocking exploration |
+| Decommissioned | Deny | deny deployments/changes except approved cleanup operations |
+
+### Terraform paths in this repository
+
+`policy.tf.disabled` is deliberately excluded because Terraform only loads files
+ending in `.tf`, and the restricted sandbox normally lacks subscription or
+management-group policy permissions. It is a learning reference, not a file to
+rename blindly: its subscription-wide deny would conflict with the public edge
+resources used by this combined lab.
+
+Use one of these implementation paths:
+
+**Restricted sandbox:** create a separate optional resource-group policy file
+containing only a harmless audit control, after the permission check below.
+
+```bash
+RG_ID=$(az group show -n <sandbox-resource-group> --query id -o tsv)
+az role assignment list --scope "$RG_ID" --include-inherited -o table
+az policy assignment list --scope "$RG_ID" -o table
+```
+
+If either policy command returns `AuthorizationFailed`, leave policy disabled
+and document the limitation. ARM, Bicep and Portal use the same Azure RBAC
+authorization and cannot bypass it.
+
+**Enterprise tenant:** deploy the management-group hierarchy and policy in a
+separate platform-bootstrap/root module using a privileged pipeline identity.
+Keep the workload stack in this folder on a lower-privileged identity. The
+normal sequence is:
+
+```text
+1. Tenant/platform bootstrap -> management groups and platform subscriptions
+2. Policy library            -> definitions and initiatives
+3. Policy assignments        -> management-group scopes and exemptions
+4. Subscription vending      -> place Corp/Online subscriptions in hierarchy
+5. Workload deployment       -> this Lab 1/Lab 4 stack
+6. Compliance validation     -> query effective assignments and test controls
+```
+
+For a production ALZ, prefer the Microsoft ALZ IaC Accelerator and Azure
+Verified Modules rather than growing this teaching stack into a tenant-scale
+platform implementation.
+
+Policy references:
+
+- [Azure Policy overview](https://learn.microsoft.com/azure/governance/policy/overview)
+- [Evaluate the impact of a new policy](https://learn.microsoft.com/azure/governance/policy/concepts/evaluate-impact)
+- [Remediate noncompliant resources](https://learn.microsoft.com/azure/governance/policy/how-to/remediate-resources)
+
+### Validate effective policy
+
+List assignments visible at the resource group, including inherited ones:
+
+```bash
+RG_ID=$(az group show -n <sandbox-resource-group> --query id -o tsv)
+az policy assignment list --scope "$RG_ID" --disable-scope-strict-match -o table
+az policy state summarize --resource-group <sandbox-resource-group> -o json
+```
+
+In a tenant where the subscription is under `Corp`, validate the hierarchy and
+effective assignments:
+
+```bash
+az account management-group subscription show-sub-under-mg \
+  --name <corp-management-group-id> --subscription <subscription-id>
+az policy assignment list --scope /subscriptions/<subscription-id> \
+  --disable-scope-strict-match -o table
+```
+
+Test deny behavior with a disposable noncompliant resource, then delete it if it
+was unexpectedly allowed. A denial should name the policy assignment in the ARM
+error. Also confirm a compliant private NIC/VM still deploys successfully; a
+negative test alone is not sufficient validation.
 
 ## 9. Functional testing
 
