@@ -73,4 +73,19 @@ run "corp_landing_zone_contract" {
     error_message = "Ubuntu package installation requires HTTP/80 egress through Azure Firewall."
   }
 
+  assert {
+    condition     = contains(flatten([for collection in azurerm_firewall_policy_rule_collection_group.egress.application_rule_collection : [for rule in collection.rule : rule.destination_fqdns]]), "*.ubuntu.com")
+    error_message = "The firewall must allow Ubuntu package repository FQDNs."
+  }
+
+  assert {
+    condition     = length(azurerm_virtual_machine_extension.online_frontend_config) == 2
+    error_message = "Both Lab 4 frontend VMs require a repeatable configuration extension."
+  }
+
+  assert {
+    condition     = length(azurerm_virtual_machine_extension.online_api_config) == 2
+    error_message = "Both Lab 4 API VMs require a repeatable configuration extension."
+  }
+
 }

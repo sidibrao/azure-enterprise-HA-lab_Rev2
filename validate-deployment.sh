@@ -1,0 +1,103 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+failures=0
+
+pass() {
+  printf 'PASS  %s\n' "$1"
+}
+
+fail() {
+  printf 'FAIL  %s\n' "$1" >&2
+  failures=$((failures + 1))
+}
+
+require_command() {
+  command -v "$1" >/dev/null 2>&1 || {
+    printf 'Required command not found: %s\n' "$1" >&2
+    exit 2
+  }
+}
+
+require_command az
+require_command curl
+require_command terraform
+
+resource_group=$(terraform output -raw resource_group_name 2>/dev/null || true)
+lab1_url=$(terraform output -raw lab1_public_dns_url 2>/dev/null || true)
+lab4_url=$(terraform output -raw lab4_waf_url 2>/dev/null || true)
+
+if [[ -z "$resource_group" || -z "$lab1_url" || -z "$lab4_url" ]]; then
+  echo 'Terraform outputs are unavailable. Initialize the correct backend and deploy first.' >&2
+  exit 2
+fi
+
+echo "Subscription: $(az account show --query name -o tsv)"
+echo "Resource group: $resource_group"
+echo
+
+non_running=$(az vm list -g "$resource_group" --show-details \
+  --query "[?powerState!='VM running'].name" -o tsv)
+if [[ -z "$non_running" ]]; then
+  pass 'All deployed virtual machines are running'
+else
+  fail "VMs not running: $non_running"
+fi
+
+lab1_status=$(curl --silent --show-error --connect-timeout 10 --max-time 30 \
+  --output /tmp/contoso-lab1-validation.html --write-out '%{http_code}' "$lab1_url/" || true)
+if [[ "$lab1_status" == '200' ]]; then
+  pass "Lab 1 returned HTTP 200 ($lab1_url)"
+else
+  fail "Lab 1 returned HTTP $lab1_status ($lab1_url)"
+fi
+
+lab4_status=$(curl --silent --show-error --connect-timeout 10 --max-time 30 \
+  --output /tmp/contoso-lab4-validation.html --write-out '%{http_code}' "$lab4_url/" || true)
+if [[ "$lab4_status" == '200' ]]; then
+  pass "Lab 4 returned HTTP 200 ($lab4_url)"
+else
+  fail "Lab 4 returned HTTP $lab4_status ($lab4_url)"
+fi
+
+api_response=$(curl --silent --show-error --connect-timeout 10 --max-time 30 \
+  "$lab4_url/api/health" || true)
+if [[ "$api_response" == *'"status":"healthy"'* && "$api_response" == *'"database":"connected"'* ]]; then
+  pass 'Lab 4 API is healthy and connected to SQL over its private endpoint'
+else
+  fail "Lab 4 API/SQL health failed: ${api_response:-no response}"
+fi
+
+custom_waf_status=$(curl --silent --show-error --connect-timeout 10 --max-time 30 \
+  --output /dev/null --write-out '%{http_code}' -H 'X-Lab-Block: true' "$lab4_url/" || true)
+if [[ "$custom_waf_status" == '403' ]]; then
+  pass 'WAF custom header rule returned HTTP 403'
+else
+  fail "WAF custom header rule returned HTTP $custom_waf_status"
+fi
+
+sqli_waf_status=$(curl --silent --show-error --connect-timeout 10 --max-time 30 \
+  --output /dev/null --write-out '%{http_code}' "$lab4_url/?id=%27%20OR%201%3D1--" || true)
+if [[ "$sqli_waf_status" == '403' ]]; then
+  pass 'WAF OWASP SQL-injection test returned HTTP 403'
+else
+  fail "WAF OWASP SQL-injection test returned HTTP $sqli_waf_status"
+fi
+
+unhealthy_backends=$(az network application-gateway show-backend-health \
+  -g "$resource_group" -n agw-contoso-online \
+  --query "backendAddressPools[].backendHttpSettingsCollection[].servers[?health!='Healthy'].address" \
+  -o tsv)
+if [[ -z "$unhealthy_backends" ]]; then
+  pass 'All Application Gateway frontend backends are healthy'
+else
+  fail "Unhealthy Application Gateway backends: $unhealthy_backends"
+fi
+
+echo
+if ((failures > 0)); then
+  printf 'Validation failed: %d check(s) failed.\n' "$failures" >&2
+  exit 1
+fi
+
+echo 'Validation passed: all deployment checks succeeded.'

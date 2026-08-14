@@ -1,0 +1,83 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+export DEBIAN_FRONTEND=noninteractive
+readonly LOG_PREFIX="[lab4-frontend-${zone}]"
+
+log() {
+  echo "$LOG_PREFIX $*"
+}
+
+wait_for_apt() {
+  local attempt
+  for attempt in $(seq 1 60); do
+    if ! pgrep -x apt-get >/dev/null 2>&1 && ! pgrep -x dpkg >/dev/null 2>&1; then
+      return 0
+    fi
+    log "Waiting for another package process ($attempt/60)"
+    sleep 5
+  done
+  log "Timed out waiting for the package manager"
+  return 1
+}
+
+install_packages() {
+  local attempt
+  for attempt in $(seq 1 20); do
+    wait_for_apt
+    if apt-get -o Acquire::Retries=5 update &&
+      apt-get -o Acquire::Retries=5 install -y --no-install-recommends nginx curl; then
+      return 0
+    fi
+    log "Package installation failed; firewall/routing may still be converging ($attempt/20)"
+    sleep 15
+  done
+  log "Unable to install frontend packages after all retries"
+  return 1
+}
+
+log "Starting repeatable frontend configuration"
+install_packages
+
+install -d -m 0755 /var/www/html
+echo '${frontend_html_b64}' | base64 --decode > /var/www/html/index.html
+chmod 0644 /var/www/html/index.html
+printf '%s\n' 'healthy frontend ${zone_key}' > /var/www/html/health
+
+cat > /etc/nginx/sites-available/default <<'NGINX'
+server {
+  listen 80 default_server;
+  root /var/www/html;
+
+  location = /health {
+    access_log off;
+  }
+
+  location /api/ {
+    proxy_pass http://api.online.contoso.internal:8000;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+  }
+
+  location / {
+    try_files $uri $uri/ /index.html;
+  }
+}
+NGINX
+
+nginx -t
+systemctl enable nginx
+systemctl restart nginx
+
+for attempt in $(seq 1 30); do
+  if systemctl is-active --quiet nginx && curl --fail --silent --max-time 5 http://localhost/health >/dev/null; then
+    log "Frontend health validation succeeded"
+    exit 0
+  fi
+  log "Waiting for frontend health ($attempt/30)"
+  sleep 5
+done
+
+systemctl status nginx --no-pager -l || true
+log "Frontend failed its final health validation"
+exit 1

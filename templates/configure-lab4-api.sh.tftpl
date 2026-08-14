@@ -1,0 +1,83 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+export DEBIAN_FRONTEND=noninteractive
+readonly LOG_PREFIX="[lab4-api-${zone}]"
+
+log() {
+  echo "$LOG_PREFIX $*"
+}
+
+wait_for_apt() {
+  local attempt
+  for attempt in $(seq 1 60); do
+    if ! pgrep -x apt-get >/dev/null 2>&1 && ! pgrep -x dpkg >/dev/null 2>&1; then
+      return 0
+    fi
+    log "Waiting for another package process ($attempt/60)"
+    sleep 5
+  done
+  log "Timed out waiting for the package manager"
+  return 1
+}
+
+install_packages() {
+  local attempt
+  for attempt in $(seq 1 20); do
+    wait_for_apt
+    if apt-get -o Acquire::Retries=5 update &&
+      apt-get -o Acquire::Retries=5 install -y --no-install-recommends \
+        curl freetds-bin python3-flask python3-pyodbc tdsodbc; then
+      return 0
+    fi
+    log "Package installation failed; firewall/routing may still be converging ($attempt/20)"
+    sleep 15
+  done
+  log "Unable to install API packages after all retries"
+  return 1
+}
+
+log "Starting repeatable API configuration"
+install_packages
+
+install -d -m 0755 /opt/contoso-api
+echo '${api_source_b64}' | base64 --decode > /opt/contoso-api/app.py
+chmod 0644 /opt/contoso-api/app.py
+echo '${sql_connection_b64}' | base64 --decode > /etc/contoso-api.env
+chmod 0600 /etc/contoso-api.env
+
+cat > /etc/systemd/system/contoso-api.service <<'SERVICE'
+[Unit]
+Description=Contoso Lab 4 API
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/contoso-api.env
+ExecStart=/usr/bin/python3 /opt/contoso-api/app.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+SERVICE
+
+systemctl daemon-reload
+systemctl enable contoso-api
+systemctl restart contoso-api
+
+for attempt in $(seq 1 45); do
+  if systemctl is-active --quiet contoso-api && curl --fail --silent --max-time 10 http://localhost:8000/health >/dev/null; then
+    log "API and SQL initialization health validation succeeded"
+    exit 0
+  fi
+  log "Waiting for API/private DNS/SQL health ($attempt/45)"
+  sleep 10
+done
+
+systemctl status contoso-api --no-pager -l || true
+journalctl -u contoso-api -n 80 --no-pager || true
+getent hosts '${sql_fqdn}' || true
+log "API failed its final health validation"
+exit 1

@@ -114,40 +114,15 @@ resource "azurerm_linux_virtual_machine" "online_api" {
     version   = "latest"
   }
 
-  custom_data = base64encode(<<-CLOUD
-    #cloud-config
-    package_update: true
-    packages: [python3-flask, python3-pyodbc, freetds-bin, tdsodbc]
-    write_files:
-      - path: /opt/contoso-api/app.py
-        permissions: '0644'
-        encoding: b64
-        content: ${base64encode(templatefile("${path.module}/templates/lab4-api.py.tftpl", { zone = each.value.zone, private_ip = each.value.private_ip }))}
-      - path: /etc/contoso-api.env
-        permissions: '0600'
-        content: |
-          SQL_CONNECTION=${local.lab4_sql_connection}
-      - path: /etc/systemd/system/contoso-api.service
-        permissions: '0644'
-        content: |
-          [Unit]
-          Description=Contoso Lab 4 API
-          After=network-online.target
-          [Service]
-          EnvironmentFile=/etc/contoso-api.env
-          ExecStart=/usr/bin/python3 /opt/contoso-api/app.py
-          Restart=always
-          RestartSec=10
-          [Install]
-          WantedBy=multi-user.target
-    runcmd:
-      - systemctl daemon-reload
-      - systemctl enable --now contoso-api
-  CLOUD
-  )
   boot_diagnostics {}
-  lifecycle { ignore_changes = [custom_data] }
-  depends_on = [azurerm_private_endpoint.sql, azurerm_private_dns_zone_virtual_network_link.sql_online, azurerm_network_interface_backend_address_pool_association.online_api, azurerm_firewall_policy_rule_collection_group.egress]
+  depends_on = [
+    azurerm_firewall.this,
+    azurerm_firewall_policy_rule_collection_group.egress,
+    azurerm_network_interface_backend_address_pool_association.online_api,
+    azurerm_private_dns_zone_virtual_network_link.sql_online,
+    azurerm_private_endpoint.sql,
+    azurerm_subnet_route_table_association.online_api,
+  ]
 }
 
 resource "azurerm_virtual_machine_extension" "online_api_config" {
@@ -159,9 +134,20 @@ resource "azurerm_virtual_machine_extension" "online_api_config" {
   type_handler_version       = "2.1"
   auto_upgrade_minor_version = true
   protected_settings = jsonencode({
-    commandToExecute = "echo '${base64encode(templatefile("${path.module}/templates/lab4-api.py.tftpl", { zone = each.value.zone, private_ip = each.value.private_ip }))}' | base64 -d > /opt/contoso-api/app.py && sed -i 's|DRIVER={FreeTDS}|DRIVER=/usr/lib/x86_64-linux-gnu/odbc/libtdsodbc.so|' /etc/contoso-api.env && systemctl restart contoso-api"
+    commandToExecute = "echo '${base64encode(templatefile("${path.module}/templates/configure-lab4-api.sh.tftpl", {
+      zone               = each.value.zone
+      api_source_b64     = base64encode(templatefile("${path.module}/templates/lab4-api.py.tftpl", { zone = each.value.zone, private_ip = each.value.private_ip }))
+      sql_connection_b64 = base64encode("SQL_CONNECTION=${local.lab4_sql_connection}\n")
+      sql_fqdn           = azurerm_mssql_server.lab4[0].fully_qualified_domain_name
+    }))}' | base64 -d > /tmp/configure-contoso-api.sh && chmod 0700 /tmp/configure-contoso-api.sh && /tmp/configure-contoso-api.sh"
   })
   tags = merge(local.lab4_tags, { availability_zone = each.value.zone, tier = "api" })
+
+  depends_on = [
+    azurerm_firewall.this,
+    azurerm_private_dns_zone_virtual_network_link.sql_online,
+    azurerm_private_endpoint.sql,
+  ]
 }
 
 resource "azurerm_linux_virtual_machine" "online_frontend" {
@@ -192,37 +178,39 @@ resource "azurerm_linux_virtual_machine" "online_frontend" {
     version   = "latest"
   }
 
-  custom_data = base64encode(<<-CLOUD
-    #cloud-config
-    package_update: true
-    packages: [nginx]
-    write_files:
-      - path: /var/www/html/index.html
-        permissions: '0644'
-        encoding: b64
-        content: ${base64encode(templatefile("${path.module}/templates/lab4-frontend.html.tftpl", { zone = each.value.zone, private_ip = each.value.private_ip, vm_name = "vm-${local.lab4_prefix}-fe-${each.key}", region = data.azurerm_resource_group.sandbox.location }))}
-      - path: /var/www/html/health
-        permissions: '0644'
-        content: 'healthy frontend ${each.key}'
-      - path: /etc/nginx/sites-available/default
-        permissions: '0644'
-        content: |
-          server {
-            listen 80 default_server;
-            root /var/www/html;
-            location = /health { access_log off; }
-            location /api/ {
-              proxy_pass http://api.online.contoso.internal:8000;
-              proxy_set_header Host $host;
-              proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-            }
-            location / { try_files $uri $uri/ /index.html; }
-          }
-    runcmd:
-      - systemctl enable nginx
-      - systemctl restart nginx
-  CLOUD
-  )
   boot_diagnostics {}
-  depends_on = [azurerm_private_dns_a_record.online_api_pool, azurerm_subnet_route_table_association.online_frontend, azurerm_firewall_policy_rule_collection_group.egress]
+  depends_on = [
+    azurerm_firewall.this,
+    azurerm_firewall_policy_rule_collection_group.egress,
+    azurerm_private_dns_a_record.online_api_pool,
+    azurerm_subnet_route_table_association.online_frontend,
+  ]
+}
+
+resource "azurerm_virtual_machine_extension" "online_frontend_config" {
+  for_each                   = var.enable_lab4 ? local.lab4_frontends : {}
+  name                       = "configure-contoso-frontend"
+  virtual_machine_id         = azurerm_linux_virtual_machine.online_frontend[each.key].id
+  publisher                  = "Microsoft.Azure.Extensions"
+  type                       = "CustomScript"
+  type_handler_version       = "2.1"
+  auto_upgrade_minor_version = true
+  protected_settings = jsonencode({
+    commandToExecute = "echo '${base64encode(templatefile("${path.module}/templates/configure-lab4-frontend.sh.tftpl", {
+      zone     = each.value.zone
+      zone_key = each.key
+      frontend_html_b64 = base64encode(templatefile("${path.module}/templates/lab4-frontend.html.tftpl", {
+        zone       = each.value.zone
+        private_ip = each.value.private_ip
+        vm_name    = "vm-${local.lab4_prefix}-fe-${each.key}"
+        region     = data.azurerm_resource_group.sandbox.location
+      }))
+    }))}' | base64 -d > /tmp/configure-contoso-frontend.sh && chmod 0700 /tmp/configure-contoso-frontend.sh && /tmp/configure-contoso-frontend.sh"
+  })
+  tags = merge(local.lab4_tags, { availability_zone = each.value.zone, tier = "frontend" })
+
+  depends_on = [
+    azurerm_firewall.this,
+    azurerm_private_dns_a_record.online_api_pool,
+  ]
 }

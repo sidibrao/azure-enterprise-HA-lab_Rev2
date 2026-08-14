@@ -130,8 +130,13 @@ resource "azurerm_firewall_policy_rule_collection_group" "egress" {
         type = "Http"
         port = 80
       }
-      source_addresses  = ["10.2.0.0/16", "10.3.0.0/16"]
-      destination_fqdns = ["*.ubuntu.com", "ubuntu.com"]
+      source_addresses = ["10.2.0.0/16", "10.3.0.0/16"]
+      destination_fqdns = [
+        "ubuntu.com",
+        "*.ubuntu.com",
+        "packages.microsoft.com",
+        "*.packages.microsoft.com",
+      ]
     }
   }
 }
@@ -156,6 +161,8 @@ resource "azurerm_firewall" "this" {
     subnet_id            = azurerm_subnet.firewall_management.id
     public_ip_address_id = azurerm_public_ip.firewall_management.id
   }
+
+  depends_on = [azurerm_firewall_policy_rule_collection_group.egress]
 }
 
 resource "azurerm_monitor_diagnostic_setting" "firewall" {

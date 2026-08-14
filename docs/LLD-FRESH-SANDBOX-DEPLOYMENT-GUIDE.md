@@ -647,6 +647,17 @@ negative test alone is not sufficient validation.
 
 ## 9. Functional testing
 
+Run the non-destructive automated smoke test first:
+
+```bash
+./validate-deployment.sh
+```
+
+It exits with status 1 if a VM is stopped, either website is unavailable, the
+API cannot reach SQL, a WAF test is not blocked, or an Application Gateway
+backend is unhealthy. Continue with the detailed tests below for evidence and
+zone-specific failover validation.
+
 ### Lab 1
 
 ```bash
@@ -801,6 +812,40 @@ terraform plan -destroy -out=destroy.tfplan
 terraform show -no-color destroy.tfplan | less
 terraform apply destroy.tfplan
 ```
+
+Wait for `Destroy complete` before touching state or backend files. The backend
+Storage Account was created by the Lab 0 bootstrap script, not by the workload
+Terraform state, so `terraform destroy` intentionally leaves it in place.
+
+For a complete disposable-sandbox cleanup, first verify the workload state is
+empty:
+
+```bash
+source .backend.env
+terraform state list
+```
+
+The command should return no managed resource addresses. You can then remove
+only the generated local files (all are ignored by Git):
+
+```bash
+rm -f fresh-sandbox.tfplan destroy.tfplan terraform.tfvars backend.hcl .backend.env
+rm -rf .terraform
+```
+
+Do not delete `backend.hcl`, `.backend.env`, the backend Storage Account, or its
+state blob before destruction completes. Doing so would discard Terraform's
+resource ownership information. If the backend is in the disposable sandbox
+resource group, sandbox expiration will remove it. If it is in a persistent
+resource group that you own, delete that specific backend only after confirming
+the state is empty and that no other Terraform workspace uses it.
+
+Lab 4 guest configuration now runs through dedicated Custom Script extensions
+instead of one-shot cloud-init package installation. Both frontend and API
+scripts wait for APT locks, retry package downloads while Firewall/UDR rules
+converge, configure services idempotently, and return failure unless local
+health validation succeeds. Therefore a fresh `terraform apply` must not be
+considered successful if Nginx, Flask, private DNS, or SQL initialization fails.
 
 For the next sandbox: authenticate, select subscription, run
 `configure-sandbox.sh`, archive old state, initialize, validate/test, plan and
