@@ -792,6 +792,8 @@ Capture these as evidence:
 | Same zone repeatedly | Flow hashing/connection reuse; use failure test, not refresh count |
 | Private DNS fails locally | Expected; test from a linked VNet VM |
 | Run Command unavailable | Sandbox restriction/region; inspect VM agent or use extensions |
+| `ReferencedResourceNotProvisioned` during Online peering | Azure was still updating a subnet; use the current dependency-serialized Terraform and create a new plan |
+| Lab 4 extensions cannot reach Ubuntu repositories | Confirm both Online/Hub peerings are `Connected` before retrying extensions |
 
 Useful guest checks:
 
@@ -802,6 +804,39 @@ journalctl -u contoso-api -n 80 --no-pager
 getent hosts api.online.contoso.internal
 getent hosts <sql-server>.database.windows.net
 ```
+
+### Recover a partial Lab 4 apply
+
+Do not destroy the successfully created platform when the only failed resources
+are `peer-online-to-hub` and the four Lab 4 guest extensions. Never reuse the
+saved plan from the failed apply. Confirm that no Terraform process remains,
+then remove only the failed extension instances:
+
+```bash
+RG=<sandbox-resource-group>
+
+az vm extension delete -g "$RG" -n configure-contoso-api \
+  --vm-name vm-contoso-online-api-zone1
+az vm extension delete -g "$RG" -n configure-contoso-api \
+  --vm-name vm-contoso-online-api-zone2
+az vm extension delete -g "$RG" -n configure-contoso-frontend \
+  --vm-name vm-contoso-online-fe-zone1
+az vm extension delete -g "$RG" -n configure-contoso-frontend \
+  --vm-name vm-contoso-online-fe-zone2
+
+rm -f fresh-sandbox.tfplan recovery.tfplan
+source .backend.env
+terraform plan -out=recovery.tfplan
+terraform show -no-color recovery.tfplan | less
+terraform apply recovery.tfplan
+```
+
+The expected recovery plan is five creates and no changes or destroys: the
+missing Online-to-Hub peering plus two frontend and two API extensions. The
+current Terraform serializes Online subnet creation, the two peering directions,
+and guest configuration so the UDR next hop `10.1.0.4` is reachable before APT
+starts. If the plan contains VM replacement or broad destruction, do not apply
+it; recheck the active subscription, backend and state.
 
 ## 13. Destroy and rebuild
 

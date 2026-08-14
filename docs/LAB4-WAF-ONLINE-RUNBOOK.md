@@ -26,30 +26,30 @@ frontend calls across the API tier.
 
 | Scope | Name | Target |
 |---|---|---|
-| Public | `erp-web-yo2oo.eastus.cloudapp.azure.com` | Lab 1 firewall public IP |
+| Public | `terraform output -raw lab1_public_fqdn` | Lab 1 firewall public IP |
 | Private | `firewall.hub.contoso.internal` | `10.1.0.4` |
 | Private | `web.corp.contoso.internal` | `10.2.2.20` |
 | Private | `web-zone1/2.corp.contoso.internal` | `10.2.2.11/12` |
-| Public | `contoso-portal-yo2oo.eastus.cloudapp.azure.com` | Lab 4 WAF public IP |
+| Public | `terraform output -raw lab4_waf_public_fqdn` | Lab 4 WAF public IP |
 | Private | `frontend.online.contoso.internal` | `10.3.1.11`, `10.3.1.12` |
 | Private | `fe-zone1/2.online.contoso.internal` | `10.3.1.11/12` |
 | Private | `api.online.contoso.internal` | `10.3.2.20` |
 | Private | `api-zone1/2.online.contoso.internal` | `10.3.2.11/12` |
-| Private endpoint | `sql-contoso-online-yo2oo.database.windows.net` | `10.3.3.4` inside Online VNet |
+| Private endpoint | `terraform output -json lab4_private_dns` | SQL private IP inside Online VNet |
 
 Private names resolve only from linked VNets. The database's normal Microsoft
 hostname resolves through `privatelink.database.windows.net` inside the VNet.
 
 ## Interact with the application
 
-Open `http://contoso-portal-yo2oo.eastus.cloudapp.azure.com` and enter a safe
-name plus a 3-240 character message. The form calls the API, inserts a row with
-a parameterized statement, then reloads the newest 25 rows from Azure SQL.
+Obtain the current sandbox URL, open it, and enter a safe name plus a 3-240
+character message. The form calls the API, inserts a row with a parameterized
+statement, then reloads the newest 25 rows from Azure SQL.
 
 CLI equivalent:
 
 ```bash
-PORTAL=http://contoso-portal-yo2oo.eastus.cloudapp.azure.com
+PORTAL=$(terraform output -raw lab4_waf_url)
 curl "$PORTAL/api/health"
 curl -X POST -H 'Content-Type: application/json' \
   --data '{"name":"Sid","message":"Portal database test"}' \
@@ -112,9 +112,28 @@ terraform test
 terraform plan -out=lab4.tfplan
 terraform apply lab4.tfplan
 terraform output
+./validate-deployment.sh
 ```
 
 Always inspect the plan for unexpected destroys or replacements.
+
+Terraform loads every `.tf` file in this directory as one configuration. Run
+the commands from the repository root; do not execute `main.tf`,
+`lab4-network.tf`, or a template independently. The Lab 4 dependency chain is
+deliberately serialized:
+
+```text
+Online subnets -> Online-to-Hub peering -> Hub-to-Online peering
+  -> Lab 4 VMs -> guest extensions -> Nginx/API/SQL health checks
+```
+
+This prevents Azure subnet updates from racing with peering creation and
+prevents guest package installation before the Firewall next hop is reachable.
+
+If a previous apply failed with `ReferencedResourceNotProvisioned`, do not reuse
+its saved plan. Use the partial-recovery procedure in the fresh-sandbox LLD
+guide; the expected recovery is one missing peering and four extensions, with no
+VM replacement or broad destruction.
 
 ## Cost and production gaps
 
