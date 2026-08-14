@@ -1,3 +1,8 @@
+output "resource_group_name" {
+  description = "Existing sandbox resource group containing the lab resources."
+  value       = data.azurerm_resource_group.sandbox.name
+}
+
 output "firewall_private_ip" {
   description = "Next hop used by the ERP spoke UDR."
   value       = azurerm_firewall.this.ip_configuration[0].private_ip_address
